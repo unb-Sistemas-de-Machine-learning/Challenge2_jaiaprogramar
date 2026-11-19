@@ -1,0 +1,25 @@
+{
+  "semantic": {
+    "recall@1": 0.0633,
+    "recall@5": 0.1333,
+    "recall@10": 0.19,
+    "mrr": 0.0934
+  },
+  "lexical": {
+    "recall@1": 0.71,
+    "recall@5": 0.85,
+    "recall@10": 0.8833,
+    "mrr": 0.7712
+  },
+  "hybrid": {
+    "recall@1": 0.3333,
+    "recall@5": 0.72,
+    "recall@10": 0.81,
+    "mrr": 0.489
+  },
+  "n": 300,
+  "seed": 42,
+  "keep": 0.7,
+  "corpus_size": 2088,
+  "evaluated_at": "2026-11-11T13:18:12+00:00"
+}
