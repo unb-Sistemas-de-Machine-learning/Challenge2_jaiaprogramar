@@ -17,23 +17,23 @@
     "v2_classificador_treinado": {
       "descricao": "CLIP Embeddings (512D) + Regressão Logística treinada",
       "acuracia": 0.9831932773109243,
-      "f1_macro": 0.9831349206349206,
-      "f1_fresco": 0.9841269841269841,
-      "f1_estragado": 0.9821428571428571,
+      "f1_macro": 0.9831825890333521,
+      "f1_fresco": 0.9836065573770492,
+      "f1_estragado": 0.9827586206896551,
       "matriz_confusao": [
         [
-          62,
-          0
+          60,
+          2
         ],
         [
-          2,
-          55
+          0,
+          57
         ]
       ]
     }
   },
   "ganho_evolucao": {
-    "ganho_f1_macro": 0.13754668534080294,
+    "ganho_f1_macro": 0.13759435373923445,
     "ganho_acuracia": 0.134453781512605
   }
 }

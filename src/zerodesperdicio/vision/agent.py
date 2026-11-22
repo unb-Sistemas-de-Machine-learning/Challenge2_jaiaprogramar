@@ -72,9 +72,10 @@ class VisionAgent:
         # Inferência do classificador treinado
         pred = self.classifier.predict(image)
 
-        # Regra de Incerteza (Active Learning):
-        # Se a probabilidade for próxima a 50% (ex: entre 40% e 65%), marca para conferência do usuário
-        margem_incerteza = 0.40 <= pred.prob_estragar <= 0.65
+        # Regra de Incerteza (Active Learning conservadora):
+        # Se a probabilidade de deterioração estiver na faixa de ambiguidade (entre 25% e 70%),
+        # marca obrigatoriamente para revisão e confirmação humana no app
+        margem_incerteza = 0.25 <= pred.prob_estragar <= 0.70
 
         if pred.sobe_prioridade:
             dias_recomendados = 1  # Consumir até amanhã

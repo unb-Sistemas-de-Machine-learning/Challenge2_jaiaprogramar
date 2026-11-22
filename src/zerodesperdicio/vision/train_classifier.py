@@ -163,10 +163,14 @@ def train_and_evaluate(
     zs_f1_fresco = float(f1_score(y_test, y_pred_zero_shot, pos_label=0, zero_division=0))
     zs_f1_estragado = float(f1_score(y_test, y_pred_zero_shot, pos_label=1, zero_division=0))
 
-    # 5. Treina a Regressão Logística supervisionada
-    print("\n[3/4] Treinando Classificador Supervisionado (Regressão Logística)...")
+    # 5. Treina a Regressão Logística supervisionada com ponderação de custo (Cost-Sensitive Learning)
+    # Dá peso maior para classe estragado (1) para evitar Falsos Negativos (segurança alimentar)
+    print("\n[3/4] Treinando Classificador Supervisionado (Regressão Logística - Custo Sensível)...")
     lr_model = LogisticRegression(
-        C=1.0, max_iter=1000, random_state=42, class_weight="balanced"
+        C=1.0,
+        max_iter=1000,
+        random_state=42,
+        class_weight={0: 1.0, 1: 2.0},  # Penaliza 2x mais deixar passar estragado
     )
     lr_model.fit(X_train, y_train)
 
@@ -264,9 +268,11 @@ class FreshnessClassifierService:
         self,
         model_path: Optional[Path] = None,
         clip_extractor: Optional[CLIPZeroShotClassifier] = None,
+        spoilage_threshold: float = 0.50,  # Limiar balanceado padrão (>=0.50 para estragando)
     ):
         root_dir = Path(__file__).resolve().parent.parent.parent.parent
         self.model_path = model_path or (root_dir / "models" / "freshness_classifier.joblib")
+        self.spoilage_threshold = spoilage_threshold
 
         self.clip = clip_extractor or CLIPZeroShotClassifier()
         self._model: Optional[LogisticRegression] = None
@@ -281,7 +287,7 @@ class FreshnessClassifierService:
         return self._model
 
     def predict(self, image: Image.Image | str | Path) -> FreshnessPrediction:
-        """Prediz frescor a partir de uma imagem, retornando probabilidade e alerta."""
+        """Prediz frescor a partir de uma imagem, retornando probabilidade e alerta conservador."""
         model = self._load_model()
         emb = self.clip.extract_image_embedding(image)
         emb_2d = emb.reshape(1, -1)
@@ -291,14 +297,15 @@ class FreshnessClassifierService:
         prob_fresco = float(probs[0])
         prob_estragar = float(probs[1])
 
-        # Se probabilidade de estar estragando for >= 50%
-        if prob_estragar >= 0.50:
+        # Segurança Alimentar: Se probabilidade de estar estragando for >= limiar (>= 50%)
+        # trata como deterioração preventiva para nunca deixar alimento suspeito passar batido
+        if prob_estragar >= self.spoilage_threshold:
             status = "começando a estragar"
             confianca = prob_estragar
             sobe_prioridade = True
             alerta = (
-                "Atenção: o alimento apresenta indícios de deterioração. "
-                "Confira o aspecto e o cheiro e aproveite logo nas receitas prioritárias!"
+                "Atenção preventiva: o alimento apresenta indícios de deterioração ou perda de frescor. "
+                "Confira o aspecto visual, textura e odor antes do consumo e priorize na despensa!"
             )
         else:
             status = "fresco"
