@@ -19,6 +19,7 @@ SAMPLE_DIR = ROOT_DIR / "data" / "freshness_samples"
 IMG_GOOD = SAMPLE_DIR / "fresco" / "maca_fresca_1.jfif"
 IMG_ROTTEN = SAMPLE_DIR / "estragado" / "maca_estragada_1.jfif"
 BANANA_ROTTEN = SAMPLE_DIR / "estragado" / "banana_estragada_1.png"
+IMG_MOLD = SAMPLE_DIR / "estragado" / "wiki_estragado_1.jpg"  # prob_estragar=0.90 -> improprio
 
 
 @pytest.fixture(scope="module")
@@ -76,17 +77,33 @@ def test_trained_classifier_predictions(trained_service):
     if not IMG_GOOD.exists() or not BANANA_ROTTEN.exists():
         pytest.skip("Imagens de teste ausentes.")
 
+    # 1. Fresco: status fresco, apto para consumo
     pred_good = trained_service.predict(IMG_GOOD)
     assert isinstance(pred_good, FreshnessPrediction)
     assert pred_good.status == "fresco"
     assert pred_good.sobe_prioridade is False
+    assert pred_good.apto_para_consumo is True
     assert pred_good.prob_fresco > pred_good.prob_estragar
 
+    # 2. Consumo urgente ou improprio (banana deteriorada): nao fresco, sobe prioridade
     pred_rotten = trained_service.predict(BANANA_ROTTEN)
     assert isinstance(pred_rotten, FreshnessPrediction)
-    assert pred_rotten.status == "começando a estragar"
+    assert pred_rotten.status in ("consumir_urgente", "improprio_para_consumo")
     assert pred_rotten.sobe_prioridade is True
     assert pred_rotten.prob_estragar > pred_rotten.prob_fresco
+
+
+def test_mold_is_unsafe(trained_service):
+    """Verifica que fruta com mofo retorna improprio_para_consumo e apto_para_consumo=False."""
+    if not IMG_MOLD.exists():
+        pytest.skip("Imagem de mofo ausente.")
+
+    pred_mold = trained_service.predict(IMG_MOLD)
+    assert isinstance(pred_mold, FreshnessPrediction)
+    # Mofo tem prob_estragar >= 0.75 no modelo, logo deve ser improprio
+    assert pred_mold.apto_para_consumo is False
+    assert pred_mold.status == "improprio_para_consumo"
+    assert pred_mold.sobe_prioridade is True
 
 
 def test_vision_agent_integration(vision_agent):
@@ -101,17 +118,23 @@ def test_vision_agent_integration(vision_agent):
     assert isinstance(res_good, VisionResult)
     assert res_good.status == "fresco"
     assert res_good.sobe_prioridade is False
+    assert res_good.apto_para_consumo is True
     assert res_good.data_estimada == today + timedelta(days=5)
     assert isinstance(res_good.pantry_item_sugerido, PantryItem)
     assert res_good.pantry_item_sugerido.expires_on == today + timedelta(days=5)
 
-    # 2. Alimento estragando (sobe prioridade para urgência imediata)
+    # 2. Alimento com perda de frescor (consumir urgente ou improprio)
     res_rotten = vision_agent.analyze_image(BANANA_ROTTEN, default_item_name="Banana", today=today)
     assert isinstance(res_rotten, VisionResult)
-    assert res_rotten.status == "começando a estragar"
+    assert res_rotten.status in ("consumir_urgente", "improprio_para_consumo")
     assert res_rotten.sobe_prioridade is True
-    assert res_rotten.data_estimada == today + timedelta(days=1)  # Vence amanhã!
-    assert res_rotten.pantry_item_sugerido.expires_on == today + timedelta(days=1)
+
+    # 3. Fruta com mofo nao entra na despensa (improprio)
+    if IMG_MOLD.exists():
+        res_mold = vision_agent.analyze_image(IMG_MOLD, default_item_name="Fruta", today=today)
+        assert res_mold.apto_para_consumo is False
+        assert res_mold.dias_recomendados == 0
+        assert res_mold.status == "improprio_para_consumo"
 
 
 def test_vision_agent_trace(vision_agent):

@@ -32,10 +32,11 @@ class TraceStep:
 @dataclass(frozen=True)
 class VisionResult:
     item_name: str
-    status: str  # "fresco" ou "começando a estragar"
+    status: str  # "fresco" | "consumir_urgente" | "improprio_para_consumo"
     confianca: float
     sobe_prioridade: bool
-    dias_recomendados: int  # 1 ou 2 se estragando, 5 se fresco
+    apto_para_consumo: bool  # False = nao entra na despensa, sugerir descarte
+    dias_recomendados: int   # 0 se improprio, 1 se urgente, 5 se fresco
     data_estimada: date
     alerta: str
     precisa_revisao_humana: bool  # Active Learning (baixa certeza)
@@ -74,28 +75,41 @@ class VisionAgent:
 
         # Regra de Incerteza (Active Learning conservadora):
         # Se a probabilidade de deterioração estiver na faixa de ambiguidade (entre 25% e 70%),
-        # marca obrigatoriamente para revisão e confirmação humana no app
-        margem_incerteza = 0.25 <= pred.prob_estragar <= 0.70
+        # mas nao for improprio (>= 75%), marca obrigatoriamente para revisão e confirmação humana no app
+        margem_incerteza = 0.25 <= pred.prob_estragar < 0.75
 
-        if pred.sobe_prioridade:
-            dias_recomendados = 1  # Consumir até amanhã
-            data_estimada = today + timedelta(days=dias_recomendados)
+        if pred.status == "improprio_para_consumo":
+            # Deterioracao severa: nao adicionar na despensa
+            dias_recomendados = 0
+            data_estimada = today
+            apto_para_consumo = False
             alerta = (
-                f"Atenção: {default_item_name} apresenta indícios de deterioração. "
-                "Prioridade alta de consumo na despensa!"
+                f"ATENCAO: {default_item_name} com deterioracao severa ou mofo detectado. "
+                "NAO CONSUMIR! Descarte adequadamente ou utilize para compostagem."
+            )
+        elif pred.sobe_prioridade:
+            # Consumo urgente (perda de frescor mas ainda apto)
+            dias_recomendados = 1
+            data_estimada = today + timedelta(days=dias_recomendados)
+            apto_para_consumo = True
+            alerta = (
+                f"Atencao: {default_item_name} apresenta perda de frescor. "
+                "Prioridade alta — consumir hoje ou amanha!"
             )
         else:
-            dias_recomendados = 5  # Prazo seguro padrão para fresco
+            # Fresco
+            dias_recomendados = 5
             data_estimada = today + timedelta(days=dias_recomendados)
+            apto_para_consumo = True
             alerta = (
                 f"{default_item_name} aparenta estar fresco. "
-                "Lembre-se: o app não garante segurança alimentar; confira cheiro e textura."
+                "Lembre-se: o app nao garante seguranca alimentar; confira cheiro e textura."
             )
 
         if margem_incerteza:
-            alerta += " (Classificação incerta: favor confirmar o estado do alimento na tela)."
+            alerta += " (Classificacao incerta: favor confirmar o estado do alimento na tela)."
 
-        # Item pronto para ir direto para a despensa
+        # Item pronto para ir direto para a despensa (somente se apto para consumo)
         pantry_item = PantryItem(
             name=default_item_name,
             quantity="1 un",
@@ -107,6 +121,7 @@ class VisionAgent:
             status=pred.status,
             confianca=pred.confianca,
             sobe_prioridade=pred.sobe_prioridade,
+            apto_para_consumo=apto_para_consumo,
             dias_recomendados=dias_recomendados,
             data_estimada=data_estimada,
             alerta=alerta,

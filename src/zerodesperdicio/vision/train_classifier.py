@@ -29,9 +29,10 @@ from zerodesperdicio.vision.clip_zero_shot import CLIPZeroShotClassifier
 
 @dataclass
 class FreshnessPrediction:
-    status: str  # "fresco" ou "começando a estragar"
+    status: str  # "fresco" | "consumir_urgente" | "improprio_para_consumo"
     confianca: float
     sobe_prioridade: bool
+    apto_para_consumo: bool  # False se deterioração severa/mofo detectado
     alerta: str
     prob_estragar: float
     prob_fresco: float
@@ -297,20 +298,34 @@ class FreshnessClassifierService:
         prob_fresco = float(probs[0])
         prob_estragar = float(probs[1])
 
-        # Segurança Alimentar: Se probabilidade de estar estragando for >= limiar (>= 50%)
-        # trata como deterioração preventiva para nunca deixar alimento suspeito passar batido
-        if prob_estragar >= self.spoilage_threshold:
-            status = "começando a estragar"
+        # Classificacao em 3 niveis de seguranca alimentar:
+        # - fresco:                 prob_estragar  <  50%  → consumo normal
+        # - consumir_urgente:  50% <= prob_estragar < 70%  → aproveitamento imediato
+        # - improprio:              prob_estragar >= 70%   → descarte recomendado (mofo/podridao avancada)
+        if prob_estragar >= 0.70:
+            status = "improprio_para_consumo"
             confianca = prob_estragar
             sobe_prioridade = True
+            apto_para_consumo = False
             alerta = (
-                "Atenção preventiva: o alimento apresenta indícios de deterioração ou perda de frescor. "
-                "Confira o aspecto visual, textura e odor antes do consumo e priorize na despensa!"
+                "ATENCAO: deterioracao severa ou mofo detectado. "
+                "Nao consumir este alimento! Risco a saude. "
+                "Descarte adequadamente ou utilize para compostagem."
+            )
+        elif prob_estragar >= self.spoilage_threshold:
+            status = "consumir_urgente"
+            confianca = prob_estragar
+            sobe_prioridade = True
+            apto_para_consumo = True
+            alerta = (
+                "Atencao preventiva: o alimento apresenta perda de frescor ou maturacao avancada. "
+                "Confira aspecto visual, textura e odor e priorize o consumo hoje ou amanha!"
             )
         else:
             status = "fresco"
             confianca = prob_fresco
             sobe_prioridade = False
+            apto_para_consumo = True
             alerta = (
                 "Alimento com aspecto fresco. Lembre-se: sempre confira o item "
                 "antes do consumo."
@@ -320,6 +335,7 @@ class FreshnessClassifierService:
             status=status,
             confianca=confianca,
             sobe_prioridade=sobe_prioridade,
+            apto_para_consumo=apto_para_consumo,
             alerta=alerta,
             prob_estragar=prob_estragar,
             prob_fresco=prob_fresco,
