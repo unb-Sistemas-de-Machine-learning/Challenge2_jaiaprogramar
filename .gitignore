@@ -8,4 +8,5 @@ data/processed/
 data/index/
 data/user/
 data/models/
+*.egg-info/
 .superpowers/

@@ -1,0 +1,28 @@
+{
+  "experiment_name": "zerodesperdicio-vision-freshness",
+  "run_name": "clip-logistic-regression-v2",
+  "parameters": {
+    "model_type": "LogisticRegression",
+    "backbone": "Qdrant/clip-ViT-B-32-vision (ONNX)",
+    "embedding_dim": 512,
+    "data_augmentation": true,
+    "total_samples": 174,
+    "train_samples": 130,
+    "test_samples": 44
+  },
+  "metrics": {
+    "accuracy": 1.0,
+    "f1_macro": 1.0,
+    "f1_fresco": 1.0,
+    "f1_estragado": 1.0,
+    "baseline_f1_macro": 0.7124183006535948,
+    "gain_f1_macro": 0.2875816993464052,
+    "gain_accuracy": 0.2727272727272727
+  },
+  "tags": {
+    "stage": "candidate",
+    "passed_promotion_gate": true,
+    "responsible": "Vitor (Visão)"
+  },
+  "mlflow_logged": false
+}

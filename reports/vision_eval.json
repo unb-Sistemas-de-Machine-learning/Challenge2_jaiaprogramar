@@ -1,0 +1,39 @@
+{
+  "dataset": {
+    "total_amostras": 174,
+    "total_treino": 130,
+    "total_teste": 44,
+    "fresco": 84,
+    "estragado": 90
+  },
+  "modelos": {
+    "v1_clip_zero_shot": {
+      "descricao": "CLIP Zero-Shot sem treino (similaridade texto x imagem)",
+      "acuracia": 0.7272727272727273,
+      "f1_macro": 0.7124183006535948,
+      "f1_fresco": 0.7777777777777778,
+      "f1_estragado": 0.6470588235294118
+    },
+    "v2_classificador_treinado": {
+      "descricao": "CLIP Embeddings (512D) + Regressão Logística treinada",
+      "acuracia": 1.0,
+      "f1_macro": 1.0,
+      "f1_fresco": 1.0,
+      "f1_estragado": 1.0,
+      "matriz_confusao": [
+        [
+          21,
+          0
+        ],
+        [
+          0,
+          23
+        ]
+      ]
+    }
+  },
+  "ganho_evolucao": {
+    "ganho_f1_macro": 0.2875816993464052,
+    "ganho_acuracia": 0.2727272727272727
+  }
+}
