@@ -9,3 +9,9 @@ data/index/
 data/user/
 data/models/
 .superpowers/
+
+# Dataset original: manter fora do Git
+datasets/freshness/raw/
+
+# Metadados locais de instalação Python
+*.egg-info/
