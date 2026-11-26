@@ -50,7 +50,10 @@ def load_gates(path: Path | None = None) -> dict[str, GateSpec]:
     com erro claro). Chaves desconhecidas e modelo sem limites são erro.
     """
     path = path if path is not None else config.gates_file()
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    try:
+        data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise ValueError(f"gates.yaml inválido: {e}") from e
     if data is None:
         return {}
     if not isinstance(data, dict):

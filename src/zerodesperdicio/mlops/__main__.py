@@ -25,7 +25,24 @@ def default_by() -> str:
             return name
     except Exception:
         pass
-    return getpass.getuser()
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return "desconhecido"
+
+
+def _author(args: argparse.Namespace) -> str:
+    return (args.por or "").strip() or default_by()
+
+
+def _positive_int(value: str) -> int:
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"não é um número inteiro: {value!r}") from None
+    if n < 1:
+        raise argparse.ArgumentTypeError("a versão deve ser um inteiro maior ou igual a 1")
+    return n
 
 
 def _nonempty(value: str) -> str:
@@ -40,13 +57,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("promote", help="promove uma versão para produção, passando pelo portão")
     p.add_argument("--model", required=True, type=_nonempty)
-    p.add_argument("--version", required=True, type=int)
+    p.add_argument("--version", required=True, type=_positive_int)
     p.add_argument("--motivo", default="")
     p.add_argument("--por", default=None)
 
     r = sub.add_parser("rollback", help="volta a produção para outra versão, com motivo")
     r.add_argument("--model", required=True, type=_nonempty)
-    r.add_argument("--version", required=True, type=int)
+    r.add_argument("--version", required=True, type=_positive_int)
     r.add_argument("--motivo", required=True)
     r.add_argument("--por", default=None)
 
@@ -56,7 +73,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _promote(args: argparse.Namespace) -> int:
     result = registry.promote(
-        args.model, args.version, by=args.por or default_by(), reason=args.motivo
+        args.model, args.version, by=_author(args), reason=args.motivo
     )
     print("APROVADO" if result.aprovado else "RECUSADO")
     for reason in result.razoes:
@@ -65,7 +82,11 @@ def _promote(args: argparse.Namespace) -> int:
 
 
 def _rollback(args: argparse.Namespace) -> int:
-    registry.rollback(args.model, args.version, by=args.por or default_by(), reason=args.motivo)
+    current = registry.production(args.model)
+    if current is not None and current.version == args.version:
+        print(f"{args.model}: v{args.version} já estava em produção; nada a fazer")
+        return 0
+    registry.rollback(args.model, args.version, by=_author(args), reason=args.motivo)
     print(f"{args.model}: producao = v{args.version} (volta atrás registrada)")
     return 0
 

@@ -76,13 +76,9 @@ def test_rollback_requires_real_reason(registry_env, gates_for, capsys, motivo):
         assert capsys.readouterr().err.strip()
 
 
-_BUG_VER = "BUG: --version aceita 0 e negativos (type=int sem validar positivo); sem erro do argparse"
-
-
 @pytest.mark.parametrize("v", [
     "abc", "1.5",
-    pytest.param("-1", marks=pytest.mark.xfail(strict=True, reason=_BUG_VER)),
-    pytest.param("0", marks=pytest.mark.xfail(strict=True, reason=_BUG_VER)),
+    "-1", "0",
 ])
 @pytest.mark.parametrize("cmd", ["promote", "rollback"])
 def test_non_positive_or_non_int_version_exits_2(capsys, cmd, v):
@@ -102,11 +98,9 @@ def test_promote_model_not_in_gates_exits_2(registry_env, gates_for, capsys):
 
 
 @pytest.mark.parametrize("conteudo", [
-    pytest.param("- a\n- b\n", marks=pytest.mark.xfail(
-        strict=True, reason="BUG: gates.yaml com lista na raiz levanta AttributeError (traceback)")),
+    "- a\n- b\n",
     "m: 3\n", "m: {minimos: {recall: abc}, tolerancia: 0.1}\n", "m: {minimos: {recall: 0.8}}\n",
-    pytest.param("a: [unclosed\n", marks=pytest.mark.xfail(
-        strict=True, reason="BUG: YAML malformado levanta yaml.YAMLError (traceback) em vez de saída 2")),
+    "a: [unclosed\n",
 ])
 @pytest.mark.parametrize("cmd", [["status"], ["promote", "--model", "m", "--version", "1", "--por", "t"]])
 def test_invalid_gates_exit_2_without_traceback(registry_env, tmp_path, monkeypatch, capsys, conteudo, cmd):
@@ -170,8 +164,7 @@ def test_refused_is_logged_with_reasons(registry_env, gates_for, tmp_path):
 
 @pytest.mark.parametrize("por", [
     "",
-    pytest.param("   ", marks=pytest.mark.xfail(
-        strict=True, reason="BUG: --por só com espaços não cai no padrão e é gravado como autor")),
+    "   ",
 ])
 def test_empty_por_falls_back_to_default(registry_env, gates_for, monkeypatch, tmp_path, por):
     gates_for(registry_env)
@@ -270,7 +263,7 @@ class TestMakefile:
 
     def test_rollback(self):
         out = self._n("rollback", MODEL="m", VERSION="3", MOTIVO="deu ruim")
-        assert '-m zerodesperdicio.mlops rollback --model "m" --version "3" --motivo "deu ruim"' in out
+        assert '-m zerodesperdicio.mlops rollback --model "$MODEL" --version "$VERSION" --motivo "$MOTIVO"' in out
 
     def test_status(self):
         assert "-m zerodesperdicio.mlops status" in self._n("status")
