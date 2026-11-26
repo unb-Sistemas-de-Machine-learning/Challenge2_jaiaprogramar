@@ -6,18 +6,19 @@
     "backbone": "Qdrant/clip-ViT-B-32-vision (ONNX)",
     "embedding_dim": 512,
     "data_augmentation": true,
-    "total_samples": 474,
-    "train_samples": 355,
-    "test_samples": 119
+    "total_samples": 79,
+    "train_samples": 354,
+    "test_samples": 20
   },
   "metrics": {
-    "accuracy": 0.9831932773109243,
-    "f1_macro": 0.9831825890333521,
-    "f1_fresco": 0.9836065573770492,
-    "f1_estragado": 0.9827586206896551,
-    "baseline_f1_macro": 0.8455882352941176,
-    "gain_f1_macro": 0.13759435373923445,
-    "gain_accuracy": 0.134453781512605
+    "accuracy": 0.95,
+    "f1_macro": 0.949874686716792,
+    "f1_fresco": 0.9473684210526315,
+    "f1_estragado": 0.9523809523809523,
+    "baseline_f1_macro": 0.7916666666666667,
+    "gain_f1_macro": 0.15820802005012524,
+    "gain_accuracy": 0.1499999999999999,
+    "recall_estragado": 1.0
   },
   "tags": {
     "stage": "candidate",

@@ -17,7 +17,10 @@ from PIL import Image
 import io
 
 from zerodesperdicio.pantry import PantryItem
-from zerodesperdicio.vision.train_classifier import FreshnessClassifierService
+from zerodesperdicio.vision.train_classifier import (
+    THRESHOLD_IMPROPRIO,
+    FreshnessClassifierService,
+)
 
 
 @dataclass(frozen=True)
@@ -40,7 +43,7 @@ class VisionResult:
     data_estimada: date
     alerta: str
     precisa_revisao_humana: bool  # Active Learning (baixa certeza)
-    pantry_item_sugerido: PantryItem
+    pantry_item_sugerido: Optional[PantryItem]  # None se impróprio para consumo
 
 
 class VisionAgent:
@@ -75,8 +78,8 @@ class VisionAgent:
 
         # Regra de Incerteza (Active Learning conservadora):
         # Se a probabilidade de deterioração estiver na faixa de ambiguidade (entre 25% e 70%),
-        # mas nao for improprio (>= 75%), marca obrigatoriamente para revisão e confirmação humana no app
-        margem_incerteza = 0.25 <= pred.prob_estragar < 0.75
+        # mas nao for improprio (>= THRESHOLD_IMPROPRIO), marca para revisão humana
+        margem_incerteza = 0.25 <= pred.prob_estragar < THRESHOLD_IMPROPRIO
 
         if pred.status == "improprio_para_consumo":
             # Deterioracao severa: nao adicionar na despensa
@@ -109,12 +112,15 @@ class VisionAgent:
         if margem_incerteza:
             alerta += " (Classificacao incerta: favor confirmar o estado do alimento na tela)."
 
-        # Item pronto para ir direto para a despensa (somente se apto para consumo)
-        pantry_item = PantryItem(
-            name=default_item_name,
-            quantity="1 un",
-            expires_on=data_estimada,
-        )
+        # Item para a despensa: somente se apto para consumo
+        if apto_para_consumo:
+            pantry_item: Optional[PantryItem] = PantryItem(
+                name=default_item_name,
+                quantity="1 un",
+                expires_on=data_estimada,
+            )
+        else:
+            pantry_item = None
 
         return VisionResult(
             item_name=default_item_name,

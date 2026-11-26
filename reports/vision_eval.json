@@ -1,39 +1,125 @@
 {
   "dataset": {
-    "total_amostras": 474,
-    "total_treino": 355,
-    "total_teste": 119,
-    "fresco": 246,
-    "estragado": 228
+    "total_originais": 79,
+    "total_treino_augmentado": 354,
+    "total_teste": 20,
+    "fresco": 41,
+    "estragado": 38,
+    "files_hash": "d1ffd69f020afeb5",
+    "train_files": [
+      "estragado/wiki_estragado_1.jpg",
+      "fresco/limoes_unsplash_1.jpg",
+      "estragado/adk_estragado_1.jpg",
+      "fresco/adk_fresco_11.jpg",
+      "estragado/adk_estragado_20.jpg",
+      "fresco/banana_fresca_2.png",
+      "estragado/maca_estragada_4.jpg",
+      "fresco/uva_fresca_1.jpg",
+      "estragado/adk_estragado_18.jpg",
+      "estragado/adk_estragado_2.jpg",
+      "estragado/banana_estragada_2.png",
+      "estragado/adk_estragado_8.jpg",
+      "estragado/adk_estragado_11.jpg",
+      "fresco/abacate_fresco_1.jpg",
+      "estragado/adk_estragado_13.jpg",
+      "fresco/adk_fresco_7.jpg",
+      "fresco/adk_fresco_6.jpg",
+      "fresco/manga_unsplash_1.jpg",
+      "estragado/maca_estragada_6.jpg",
+      "fresco/adk_fresco_13.jpg",
+      "estragado/banana_estragada_3.png",
+      "estragado/maca_estragada_2.jpg",
+      "fresco/adk_fresco_14.jpg",
+      "fresco/adk_fresco_12.jpg",
+      "estragado/adk_estragado_19.jpg",
+      "fresco/adk_fresco_10.jpg",
+      "fresco/adk_fresco_2.jpg",
+      "estragado/banana_estragada_9.png",
+      "fresco/banana_fresca_1.png",
+      "fresco/morango_fresco_1.jpg",
+      "fresco/maca_fresca_1.jfif",
+      "estragado/adk_estragado_15.jpg",
+      "estragado/banana_estragada_8.png",
+      "estragado/banana_estragada_7.png",
+      "estragado/adk_estragado_6.jpg",
+      "estragado/fruta_mofada_1.jpg",
+      "fresco/maca_granny_1.jpg",
+      "fresco/banana_fresca_4.png",
+      "estragado/adk_estragado_14.jpg",
+      "fresco/limao_fresco_1.jpg",
+      "estragado/adk_estragado_16.jpg",
+      "fresco/pessego_fresco_1.jpg",
+      "estragado/adk_estragado_5.jpg",
+      "fresco/maca_verde_unsplash_1.jpg",
+      "fresco/kiwi_unsplash_1.jpg",
+      "fresco/adk_fresco_1.jpg",
+      "fresco/pepino_unsplash_1.jpg",
+      "estragado/maca_estragada_1.jfif",
+      "fresco/melancia_unsplash_1.jpg",
+      "fresco/maca_gala_1.jpg",
+      "estragado/maca_estragada_5.jpg",
+      "fresco/adk_fresco_5.jpg",
+      "estragado/adk_estragado_4.jpg",
+      "fresco/tomate_fresco_1.jpg",
+      "fresco/adk_fresco_9.jpg",
+      "estragado/banana_estragada_4.png",
+      "fresco/pera_fresca_1.jpg",
+      "fresco/adk_fresco_3.jpg",
+      "estragado/maca_estragada_3.jpg"
+    ],
+    "test_files": [
+      "estragado/adk_estragado_10.jpg",
+      "estragado/banana_estragada_5.png",
+      "fresco/mirtilo_unsplash_1.jpg",
+      "fresco/banana_fresca_5.png",
+      "fresco/laranja_fresca_1.jpg",
+      "estragado/adk_estragado_12.jpg",
+      "fresco/adk_fresco_8.jpg",
+      "estragado/banana_estragada_1.png",
+      "estragado/adk_estragado_7.jpg",
+      "estragado/adk_estragado_3.jpg",
+      "fresco/maca_golden_1.jpg",
+      "estragado/adk_estragado_9.jpg",
+      "estragado/wiki_estragado_6.jpg",
+      "estragado/adk_estragado_17.jpg",
+      "fresco/adk_fresco_15.jpg",
+      "fresco/pimentao_fresco_1.jpg",
+      "fresco/banana_fresca_3.png",
+      "fresco/laranja_fresca_2.jpg",
+      "fresco/adk_fresco_4.jpg",
+      "estragado/banana_estragada_6.png"
+    ]
   },
   "modelos": {
     "v1_clip_zero_shot": {
       "descricao": "CLIP Zero-Shot sem treino (similaridade texto x imagem)",
-      "acuracia": 0.8487394957983193,
-      "f1_macro": 0.8455882352941176,
-      "f1_fresco": 0.8676470588235294,
-      "f1_estragado": 0.8235294117647058
+      "acuracia": 0.8,
+      "f1_macro": 0.7916666666666667,
+      "f1_fresco": 0.8333333333333334,
+      "f1_estragado": 0.75,
+      "recall_estragado": 0.6
     },
     "v2_classificador_treinado": {
       "descricao": "CLIP Embeddings (512D) + Regressão Logística treinada",
-      "acuracia": 0.9831932773109243,
-      "f1_macro": 0.9831825890333521,
-      "f1_fresco": 0.9836065573770492,
-      "f1_estragado": 0.9827586206896551,
+      "acuracia": 0.95,
+      "f1_macro": 0.949874686716792,
+      "f1_fresco": 0.9473684210526315,
+      "f1_estragado": 0.9523809523809523,
+      "recall_estragado": 1.0,
       "matriz_confusao": [
         [
-          60,
-          2
+          9,
+          1
         ],
         [
           0,
-          57
+          10
         ]
       ]
     }
   },
   "ganho_evolucao": {
-    "ganho_f1_macro": 0.13759435373923445,
-    "ganho_acuracia": 0.134453781512605
+    "ganho_f1_macro": 0.15820802005012524,
+    "ganho_acuracia": 0.1499999999999999
   }
 }

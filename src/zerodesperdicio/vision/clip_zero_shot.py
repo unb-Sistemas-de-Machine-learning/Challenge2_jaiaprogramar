@@ -12,6 +12,8 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from zerodesperdicio import config
+
 try:
     from fastembed import ImageEmbedding, TextEmbedding
 except ImportError:
@@ -52,6 +54,7 @@ class CLIPZeroShotClassifier:
         vision_model: str = "Qdrant/clip-ViT-B-32-vision",
         text_model: str = "Qdrant/clip-ViT-B-32-text",
         temperature: float = 100.0,
+        cache_dir: Optional[Union[str, Path]] = None,
     ):
         if ImageEmbedding is None or TextEmbedding is None:
             raise ImportError(
@@ -61,6 +64,7 @@ class CLIPZeroShotClassifier:
         self.vision_model_name = vision_model
         self.text_model_name = text_model
         self.temperature = temperature
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else config.model_cache()
 
         # Modelos ONNX carregados sob demanda na CPU
         self._img_model: Optional[ImageEmbedding] = None
@@ -69,10 +73,15 @@ class CLIPZeroShotClassifier:
         self._cached_text_embeddings: Optional[Dict[str, np.ndarray]] = None
 
     def _load_models(self) -> None:
+        cache_str = str(self.cache_dir)
         if self._img_model is None:
-            self._img_model = ImageEmbedding(model_name=self.vision_model_name)
+            self._img_model = ImageEmbedding(
+                model_name=self.vision_model_name, cache_dir=cache_str
+            )
         if self._text_model is None:
-            self._text_model = TextEmbedding(model_name=self.text_model_name)
+            self._text_model = TextEmbedding(
+                model_name=self.text_model_name, cache_dir=cache_str
+            )
 
     def _get_text_embeddings(
         self, prompts_fresh: List[str], prompts_rotten: List[str]
@@ -97,17 +106,15 @@ class CLIPZeroShotClassifier:
         self._load_models()
 
         if isinstance(image, (str, Path)):
-            img_path = str(image)
+            img_input: Union[str, Image.Image] = str(image)
         elif isinstance(image, Image.Image):
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                image.convert("RGB").save(tmp.name)
-                img_path = tmp.name
+            # Passa a imagem PIL diretamente sem gravar arquivo temporário em disco
+            img_input = image.convert("RGB")
         else:
             raise ValueError(f"Formato de imagem não suportado: {type(image)}")
 
-        emb = np.array(list(self._img_model.embed([img_path])))[0]
+        emb = np.array(list(self._img_model.embed([img_input])))[0]
+
         # Normalização L2
         norm = np.linalg.norm(emb)
         if norm > 0:

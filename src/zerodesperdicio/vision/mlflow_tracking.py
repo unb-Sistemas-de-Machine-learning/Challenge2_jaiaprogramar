@@ -17,15 +17,18 @@ except ImportError:
     mlflow = None
 
 
-MINIMUM_F1_THRESHOLD = 0.80  # Portão de promoção: mínimo de 80% no F1 Macro
+MINIMUM_F1_THRESHOLD = 0.85  # Portão alinhado com mlops/gates.yaml (zd-frescor)
+MINIMUM_RECALL_ESTRAGADO = 0.85  # Recall mínimo da classe estragado
 
 
 def log_experiment_to_mlflow(
     eval_report_path: Optional[Path] = None,
     model_path: Optional[Path] = None,
     confusion_matrix_path: Optional[Path] = None,
+    summary_output_path: Optional[Path] = None,
     experiment_name: str = "zerodesperdicio-vision-freshness",
     run_name: str = "clip-logistic-regression-v2",
+    tracking_uri: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Registra o experimento no MLflow se disponível, ou em relatório local."""
     root_dir = Path(__file__).resolve().parent.parent.parent.parent
@@ -45,12 +48,15 @@ def log_experiment_to_mlflow(
     baseline = report["modelos"]["v1_clip_zero_shot"]
     evolution = report.get("ganho_evolucao", {})
 
-    # Avaliação do portão de promoção
+    # Avaliação do portão de promoção (alinhado com mlops/gates.yaml: zd-frescor)
+    recall_estragado = metrics.get("recall_estragado", 0.0)
     passed_gate = (
         metrics["f1_macro"] >= MINIMUM_F1_THRESHOLD
+        and recall_estragado >= MINIMUM_RECALL_ESTRAGADO
         and metrics["f1_macro"] >= baseline["f1_macro"]
     )
 
+    ds = report["dataset"]
     tracking_data = {
         "experiment_name": experiment_name,
         "run_name": run_name,
@@ -59,9 +65,9 @@ def log_experiment_to_mlflow(
             "backbone": "Qdrant/clip-ViT-B-32-vision (ONNX)",
             "embedding_dim": 512,
             "data_augmentation": True,
-            "total_samples": report["dataset"]["total_amostras"],
-            "train_samples": report["dataset"]["total_treino"],
-            "test_samples": report["dataset"]["total_teste"],
+            "total_samples": ds.get("total_originais", ds.get("total_amostras", 0)),
+            "train_samples": ds.get("total_treino_augmentado", ds.get("total_treino", 0)),
+            "test_samples": ds["total_teste"],
         },
         "metrics": {
             "accuracy": metrics["acuracia"],
@@ -71,6 +77,7 @@ def log_experiment_to_mlflow(
             "baseline_f1_macro": baseline["f1_macro"],
             "gain_f1_macro": evolution.get("ganho_f1_macro", 0.0),
             "gain_accuracy": evolution.get("ganho_acuracia", 0.0),
+            "recall_estragado": recall_estragado,
         },
         "tags": {
             "stage": "candidate",
@@ -81,6 +88,8 @@ def log_experiment_to_mlflow(
 
     if mlflow is not None:
         try:
+            if tracking_uri is not None:
+                mlflow.set_tracking_uri(tracking_uri)
             mlflow.set_experiment(experiment_name)
             with mlflow.start_run(run_name=run_name):
                 # Parâmetros
@@ -109,7 +118,7 @@ def log_experiment_to_mlflow(
         print("[MLflow] Pacote 'mlflow' não instalado neste ambiente. Registro gerado localmente em reports/mlflow_summary.json.")
 
     # Salva resumo do tracking localmente para o Pedro auditar
-    summary_path = reports_dir / "mlflow_summary.json"
+    summary_path = summary_output_path or (reports_dir / "mlflow_summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(tracking_data, f, indent=2, ensure_ascii=False)
 
