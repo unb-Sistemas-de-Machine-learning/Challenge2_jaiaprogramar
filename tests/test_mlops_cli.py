@@ -123,7 +123,7 @@ def test_cli_promote_uses_default_by(registry_env, gates_for, monkeypatch):
         ("rollback", '-m zerodesperdicio.mlops rollback --model "$MODEL" --version "$VERSION" --motivo "$MOTIVO"'),
         ("status", "-m zerodesperdicio.mlops status"),
         ("eval", "-m zerodesperdicio.evaluation retrieval --registrar"),
-        ("mlflow-ui", "mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db --port 5000"),
+        ("mlflow-ui", "-m zerodesperdicio.mlops uri"),
     ],
 )
 def test_makefile_targets(alvo, esperado):

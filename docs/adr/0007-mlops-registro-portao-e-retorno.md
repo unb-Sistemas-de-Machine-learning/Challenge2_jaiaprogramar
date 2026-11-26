@@ -9,12 +9,12 @@ O sistema tem um modelo treinado (classificador de frescor) e componentes com LL
 - **MLflow** registra cada treino e cada avaliação: versão dos dados, parâmetros, commit do código, métricas e artefatos.
 - **Registro de modelos** com a marca (alias) `producao`. O app carrega sempre a versão marcada.
 - **Portão de promoção:** uma versão candidata só recebe a marca se atingir os mínimos e não piorar além da tolerância em relação à versão em produção, no mesmo conjunto fixo de avaliação. Limites em arquivo versionado.
-- **Volta atrás** = devolver a marca `producao` à versão anterior, com um comando; cada promoção e retorno fica registrado.
+- **Volta atrás** = devolver a marca `producao` a uma versão que já esteve em produção, com um comando; cada promoção e retorno fica registrado. Uma versão recusada pelo portão, ou que nunca foi promovida, não entra por volta atrás.
 - O mesmo vale para a configuração do RAG e o prompt do LLM (LLMOps).
 - **DVC** versiona os dados e encadeia o pipeline; **CI** roda testes e o portão a cada PR.
 
 ## Consequências
-- Toda versão em produção é reproduzível (dados + código + parâmetros).
+- Toda versão em produção é reproduzível (dados + código + parâmetros). A tag `git_dirty` avisa quando a versão foi avaliada com código não commitado.
 - Conjuntos de avaliação fixos precisam ser mantidos e nunca usados no treino.
 - O registro é local: `mlruns/` (SQLite e artefatos), ignorado no git, na raiz do projeto. Pode ser trocado por outro servidor com `MLFLOW_TRACKING_URI`, sem mudar código.
 - Onde ficam o servidor do MLflow e o armazenamento do DVC (compartilhado ou local) continua em aberto: hoje cada máquina tem o seu registro, então versões e a marca `producao` não são compartilhadas entre o grupo.

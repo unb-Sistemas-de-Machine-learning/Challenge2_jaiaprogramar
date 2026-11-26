@@ -33,6 +33,11 @@ def register_candidate(result: dict, rag: RagConfig, recipes_sha256: str, *,
     )
 
 
+def production_eval(version: int, *, model: str = MODEL) -> dict:
+    """Resultado da avaliação guardado com a versão (artefato retrieval_eval.json). Lança RegistryError."""
+    return registry.load_artifact(registry.get_version(model, version), "retrieval_eval.json")
+
+
 @dataclass(frozen=True)
 class ProductionInfo:
     version: int | None

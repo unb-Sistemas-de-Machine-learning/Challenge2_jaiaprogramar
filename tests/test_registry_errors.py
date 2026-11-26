@@ -107,14 +107,15 @@ def test_rollback_log_failure_restores_production(registry_env, monkeypatch):
     cand(m, 0.85)
     cand(m, 0.90)
     registry.promote(m, 1, by="x", gates=G(m))
+    registry.promote(m, 2, by="x", gates=G(m))
 
     def fail(entry):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(registry, "_append_log", fail)
-    with pytest.raises(registry.RegistryError):
-        registry.rollback(m, 2, by="x", reason="r")
-    assert registry.production(m).version == 1
+    with pytest.raises(registry.RegistryError, match="log"):
+        registry.rollback(m, 1, by="x", reason="r")
+    assert registry.production(m).version == 2
 
 
 def test_relative_sqlite_uri_artifact_location(tmp_path, monkeypatch):

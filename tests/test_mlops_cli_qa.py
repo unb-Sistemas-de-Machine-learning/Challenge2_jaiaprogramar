@@ -273,7 +273,7 @@ class TestMakefile:
 
     def test_mlflow_ui(self):
         out = self._n("mlflow-ui")
-        assert "sqlite:///mlruns/mlflow.db" in out and "mlflow ui" in out
+        assert "-m zerodesperdicio.mlops uri" in out and "ui --backend-store-uri" in out
 
     def test_phony_has_new_targets(self):
         txt = (ROOT / "Makefile").read_text(encoding="utf-8")

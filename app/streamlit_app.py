@@ -13,7 +13,7 @@ import streamlit as st
 
 from zerodesperdicio import config
 from zerodesperdicio.agents import DataNotReady, Request
-from zerodesperdicio.app_support import RESTART_NOTE, build_orchestrator, production_message
+from zerodesperdicio.app_support import RESTART_NOTE, build_orchestrator, panel_eval, production_message
 from zerodesperdicio.index import read_manifest
 from zerodesperdicio.ingredient_rules import STAPLES
 from zerodesperdicio.pantry import ExpiryStatus, PantryItem, PantryState, PantryStore, assess
@@ -296,15 +296,14 @@ with tab_data:
     st.caption(RESTART_NOTE)
 
     st.subheader("Qualidade da recuperação")
-    rep = config.reports_dir() / "retrieval_eval.json"
-    if rep.exists():
-        ev = json.loads(rep.read_text(encoding="utf-8"))
+    ev, origem = panel_eval(prod_info)
+    if ev is not None:
         names = {"semantic": "só semântica (embeddings)", "lexical": "só ingredientes (índice invertido)",
                  "hybrid": "híbrida + ranking (usada no app)"}
         st.dataframe(pd.DataFrame([{"modo": names[k], **ev[k]} for k in ("semantic", "lexical", "hybrid")]),
                      hide_index=True, use_container_width=True)
-        st.caption(f"Teste 'known item': {ev['n']} receitas sorteadas (semente {ev['seed']}); a despensa recebe "
-                   f"{ev['keep']:.0%} dos ingredientes de cada uma e medimos se a própria receita volta entre "
-                   "as k primeiras. MRR = média de 1/posição.")
+        st.caption(f"{origem} Teste 'known item': {ev['n']} receitas sorteadas (semente {ev['seed']}); a despensa "
+                   f"recebe {ev['keep']:.0%} dos ingredientes de cada uma e medimos se a própria receita volta "
+                   "entre as k primeiras. MRR = média de 1/posição.")
     else:
-        st.info("Rode `make eval` para medir a recuperação.")
+        st.info(f"{origem} Rode `make eval` para medir a recuperação.")

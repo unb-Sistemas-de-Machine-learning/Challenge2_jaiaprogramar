@@ -1,4 +1,5 @@
 PY := .venv/bin/python
+MLFLOW ?= .venv/bin/mlflow
 
 # MODEL, VERSION e MOTIVO vão pelo ambiente: o shell não interpreta aspas nem crase do valor.
 # O próprio make expande '$' em valores da linha de comando: escreva '$$' para um '$' literal.
@@ -38,5 +39,10 @@ rollback:
 status:
 	$(PY) -I -m zerodesperdicio.mlops status
 
+# Abre o mesmo registro do CLI (segue ZD_HOME e MLFLOW_TRACKING_URI). Com servidor remoto, só mostra o endereço.
 mlflow-ui:
-	.venv/bin/mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db --port 5000
+	@uri="$$($(PY) -I -m zerodesperdicio.mlops uri)" || exit 2; \
+	case "$$uri" in \
+	  http*) echo "O registro é um servidor: abra $$uri no navegador." ;; \
+	  *) $(MLFLOW) ui --backend-store-uri "$$uri" --port 5000 ;; \
+	esac

@@ -56,7 +56,7 @@ Leitura: embeddings sozinhos não bastam para "lista de ingredientes → receita
 
 ## MLOps (registro, portão e volta atrás)
 
-Decisão em [ADR 0007](docs/adr/0007-mlops-registro-portao-e-retorno.md); desenho em `docs/superpowers/specs/2026-11-19-mlops-design.md`. O MLflow guarda cada versão candidata (parâmetros, métricas, configuração, commit e conjunto de avaliação). Uma versão só vira a **produção** (marca `producao`) se passar pelo portão: atingir os mínimos e não piorar além da tolerância contra a produção atual, no mesmo conjunto de avaliação. Os limites ficam em `mlops/gates.yaml` (mudar exige ADR).
+Decisão em [ADR 0007](docs/adr/0007-mlops-registro-portao-e-retorno.md); desenho em `docs/superpowers/specs/2026-11-19-mlops-design.md`. O MLflow guarda cada versão candidata (parâmetros, métricas, configuração, commit, conjunto de avaliação e a tag `git_dirty`, que diz se havia alterações não commitadas no código). Uma versão só vira a **produção** (marca `producao`) se passar pelo portão: atingir os mínimos e não piorar além da tolerância contra a produção atual, no mesmo conjunto de avaliação. Os limites ficam em `mlops/gates.yaml` (mudar exige ADR).
 
 | Modelo registrado | O que é | Métricas do portão | Estado |
 |---|---|---|---|
@@ -68,11 +68,11 @@ Decisão em [ADR 0007](docs/adr/0007-mlops-registro-portao-e-retorno.md); desenh
 make eval                                              # mede e registra uma candidata (vN)
 make status                                            # mostra a versão em produção de cada modelo
 make promote  MODEL=zd-rag-receitas VERSION=2 MOTIVO="pesos novos"   # passa pelo portão
-make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="v2 piorou"     # volta atrás; o motivo é obrigatório
-make mlflow-ui                                         # interface do MLflow em http://localhost:5000
+make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="v2 piorou"     # volta para uma versão que já esteve em produção; motivo obrigatório
+make mlflow-ui                                         # interface do MLflow (mesmo registro do CLI) em http://localhost:5000
 ```
 
-O CLI sai com código 1 quando o portão recusa (e mostra as razões); o make mostra o erro e sai com status diferente de zero. `make rollback` não passa pelo portão. Promover a versão que já está em produção, ou voltar para ela, não faz nada e não gera evento no log. Se `promote` ou `rollback` falharem por versão ou modelo inexistente, a marca não muda.
+O CLI sai com código 1 quando o portão recusa (e mostra as razões); o make mostra o erro e sai com status diferente de zero. `make rollback` só aceita versões que já estiveram em produção. Ela não reavalia o portão, porque essas versões já passaram por ele quando foram promovidas; uma versão recusada, ou que nunca foi promovida, só entra por `make promote`. Promover a versão que já está em produção, ou voltar para ela, não faz nada e não gera evento no log. Se `promote` ou `rollback` falharem por versão ou modelo inexistente, a marca não muda.
 
 **Exemplo de fluxo.** Para testar pesos novos sem editar código, grave um JSON com a configuração (`RagConfig`) e avalie com `--config`. O `embedding_model` do JSON precisa ser o mesmo do índice; se for diferente, a avaliação aborta. O `make eval` não repassa argumentos, então use o comando direto:
 
@@ -86,11 +86,11 @@ make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="queda de qualidade"
 **Atenção ao `$` no MOTIVO.** O make expande `$` nos valores da linha de comando: escreva `$$` para um `$` literal (ex.: `MOTIVO="custo de $$5"`). Aspas e crases não são interpretadas pelo shell.
 
 **Onde ficam as coisas**
-- `mlruns/` (banco SQLite `mlflow.db` e artefatos): local e ignorado no git, sempre na raiz do projeto, de qualquer pasta que o comando rode.
+- `mlruns/` (banco SQLite `mlflow.db` e artefatos): local e ignorado no git, na raiz do projeto (ou em `$ZD_HOME`, se definido), de qualquer pasta que o comando rode. `make mlflow-ui` abre esse mesmo registro.
 - `reports/promocoes.jsonl`: uma linha por promoção, recusa ou volta atrás (quando, modelo, ação, de/para, quem, motivo, razões, métricas). Não vai para o git (está no `.gitignore`): o log é local por máquina enquanto o armazenamento compartilhado estiver em aberto.
-- `MLFLOW_TRACKING_URI`: aponta para outro servidor do MLflow em vez do SQLite local (`make mlflow-ui` abre só o banco local).
+- `MLFLOW_TRACKING_URI`: aponta para outro servidor do MLflow em vez do SQLite local. Nesse caso, `make mlflow-ui` só mostra o endereço do servidor.
 
-**No app.** O app carrega a configuração do `zd-rag-receitas` marcada como `producao` e mostra a versão na aba "Dados e métricas". Se o registro estiver vazio, sem a marca, fora do ar ou incompatível, o app **não para**: usa a configuração padrão do código e mostra um aviso. Promoções e voltas atrás só valem depois de reiniciar o app.
+**No app.** O app carrega a configuração do `zd-rag-receitas` marcada como `producao` e mostra a versão na aba "Dados e métricas". Se o registro estiver vazio, sem a marca, fora do ar ou incompatível, o app **não para**: usa a configuração padrão do código e mostra um aviso. A tabela "Qualidade da recuperação" mostra a avaliação registrada com a versão em produção (e não a última rodada local, que pode ser de uma candidata recusada); sem versão em produção, mostra a última avaliação local, com aviso. Promoções e voltas atrás só valem depois de reiniciar o app.
 
 ## Estrutura
 

@@ -65,15 +65,17 @@ def test_log_format_promotion_refusal_rollback(registry_env, tmp_path):
     cand(m, 0.86)
     registry.promote(m, 1, by="ana", reason="inicial", gates=G(m))
     registry.promote(m, 2, by="ana", gates=G(m))
-    registry.rollback(m, 3, by="bia", reason="teste")
+    registry.promote(m, 3, by="ana", gates=G(m))
+    registry.rollback(m, 1, by="bia", reason="teste")  # volta atrás só para quem já esteve em produção
     log = read_log(tmp_path)
-    assert [e["acao"] for e in log] == ["promocao", "promocao_recusada", "retorno"]
-    for e, a in zip(log, ["promocao", "promocao_recusada", "retorno"]):
+    acoes = ["promocao", "promocao_recusada", "promocao", "retorno"]
+    assert [e["acao"] for e in log] == acoes
+    for e, a in zip(log, acoes):
         check_entry(e, a)
     assert (log[0]["de"], log[0]["para"]) == (None, 1)
     assert (log[1]["de"], log[1]["para"]) == (1, 2) and log[1]["razoes"]
-    assert (log[2]["de"], log[2]["para"]) == (1, 3) and log[2]["razoes"] == []
-    assert log[2]["metricas"] == {"recall": 0.86}
+    assert (log[3]["de"], log[3]["para"]) == (3, 1) and log[3]["razoes"] == []
+    assert log[3]["metricas"] == {"recall": 0.85}
     assert log[0]["motivo"] == "inicial"
 
 
@@ -98,9 +100,9 @@ def test_rollback_to_version_already_in_production(registry_env, tmp_path):
 def test_rollback_without_prior_production(registry_env, tmp_path):
     m = registry_env
     cand(m, 0.85)
-    registry.rollback(m, 1, by="b", reason="manual")
-    assert registry.production(m).version == 1
-    assert read_log(tmp_path)[-1]["de"] is None
+    with pytest.raises(registry.RegistryError, match="nunca esteve em produção"):
+        registry.rollback(m, 1, by="b", reason="manual")
+    assert registry.production(m) is None
 
 
 def test_rollback_unknown_model(registry_env, tmp_path):
@@ -135,7 +137,8 @@ def test_rollback_sets_return_tags(registry_env):
     cand(m, 0.85)
     cand(m, 0.86)
     registry.promote(m, 1, by="a", gates=G(m))
-    registry.rollback(m, 2, by="bia", reason="porque sim")
+    registry.promote(m, 2, by="a", gates=G(m))
+    registry.rollback(m, 1, by="bia", reason="porque sim")
     t = registry.production(m).tags
     assert t["retorno_por"] == "bia" and t["motivo"] == "porque sim" and "retorno_em" in t
 

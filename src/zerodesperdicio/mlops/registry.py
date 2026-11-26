@@ -87,6 +87,18 @@ def _git_commit() -> str:
         return "desconhecido"
 
 
+def _git_dirty() -> str:
+    """"sim" se arquivos versionados têm alterações não commitadas; "nao"; ou "desconhecido"."""
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"], cwd=config._REPO_ROOT,
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        return "sim" if out.stdout.strip() else "nao"
+    except Exception:
+        return "desconhecido"
+
+
 def _experiment_id(client, model: str) -> str:
     MlflowException = _mlflow_exception()
 
@@ -141,6 +153,7 @@ def log_candidate(
             client.log_dict(run_id, content, f"config/{name}")
         client.set_tag(run_id, "conjunto_avaliacao", eval_set)
         client.set_tag(run_id, "git_commit", _git_commit())
+        client.set_tag(run_id, "git_dirty", _git_dirty())
         for k, v in (tags or {}).items():
             client.set_tag(run_id, k, v)
         client.set_terminated(run_id)
@@ -293,14 +306,25 @@ def promote(
     return result
 
 
+_HELD_PRODUCTION_TAGS = ("promovida_em", "retorno_em")
+
+
 def rollback(model: str, version: int, *, by: str, reason: str) -> None:
-    """Volta a marca para outra versão, sem portão. Exige um motivo."""
+    """Volta a marca para uma versão que já esteve em produção. Exige um motivo.
+
+    Não reavalia o portão: a versão já passou por ele quando foi promovida. Uma versão
+    recusada, ou que nunca foi promovida, só entra em produção por `promote`.
+    """
     if not reason.strip():
         raise RegistryError("Informe o motivo da volta atrás.")
     target = get_version(model, version)
     current = production(model)
     if current is not None and current.version == version:
         return  # já é a produção: nada a fazer, nem evento no log
+    if not any(t in target.tags for t in _HELD_PRODUCTION_TAGS):
+        raise RegistryError(
+            f"A versão {version} de {model} nunca esteve em produção; a volta atrás só vale para versões "
+            "que já estiveram. Para colocá-la em produção, use make promote (passa pelo portão).")
     client = _client()
     _set_alias(client, model, version,
                {"retorno_em": _now(), "retorno_por": by, "motivo": reason})

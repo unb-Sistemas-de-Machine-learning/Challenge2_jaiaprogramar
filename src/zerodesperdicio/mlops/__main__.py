@@ -68,6 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
     r.add_argument("--por", default=None)
 
     sub.add_parser("status", help="mostra a versão em produção de cada modelo")
+    sub.add_parser("uri", help="mostra o endereço do registro (o mesmo usado por promote, rollback e status)")
     return parser
 
 
@@ -103,7 +104,12 @@ def _status(_args: argparse.Namespace) -> int:
     return 0
 
 
-_COMMANDS = {"promote": _promote, "rollback": _rollback, "status": _status}
+def _uri(_args: argparse.Namespace) -> int:
+    print(registry.tracking_uri())
+    return 0
+
+
+_COMMANDS = {"promote": _promote, "rollback": _rollback, "status": _status, "uri": _uri}
 
 
 def main(argv: list[str] | None = None) -> int:
