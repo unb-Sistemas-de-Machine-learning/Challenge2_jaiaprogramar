@@ -16,10 +16,9 @@ from .index import FastEmbedder, VectorIndex, read_manifest
 from .ingredient_rules import STAPLES
 from .llm import LLMClient, get_llm
 from .pantry import PantryEntry, PantryItem, assess, split_expired
-from .ranking import RESTRICTION_GROUPS, LexicalIndex, Suggestion, Weights, rank
+from .rag_config import RagConfig
+from .ranking import RESTRICTION_GROUPS, LexicalIndex, Suggestion, rank
 from .recipes import Recipe, load_recipes
-
-CANDIDATES_PER_SOURCE = 40
 
 
 class DataNotReady(Exception):
@@ -101,7 +100,9 @@ class RestrictionsAgent:
 class RecipeAgent:
     name = "Receitas"
 
-    def __init__(self, recipes: list[Recipe], vector: VectorIndex, lexical: LexicalIndex):
+    def __init__(self, recipes: list[Recipe], vector: VectorIndex, lexical: LexicalIndex,
+                 rag: RagConfig = RagConfig()):
+        self.rag = rag
         self.by_id = {r.id: r for r in recipes}
         self.vector = vector
         self.lexical = lexical
@@ -111,15 +112,15 @@ class RecipeAgent:
         names = ", ".join(e.item.name for e in usable)
         query = (f"{req.preference.strip()}. " if req.preference.strip() else "") + f"Receita com: {names}"
         with _Timer() as t:
-            sem = self.vector.search(query, CANDIDATES_PER_SOURCE)
-            lex = self.lexical.search({e.key for e in usable}, CANDIDATES_PER_SOURCE)
+            sem = self.vector.search(query, self.rag.candidates_per_source)
+            lex = self.lexical.search({e.key for e in usable}, self.rag.candidates_per_source)
             ids = list(dict.fromkeys([i for i, _ in sem] + [i for i, _ in lex]))
             ids = [i for i in ids if i in self.by_id]
             sims = self.vector.similarities(query, ids)
         trace.append(TraceStep(self.name, "recuperação híbrida",
                                f"{len(sem)} pela busca semântica + {len(lex)} por ingredientes = "
                                f"{len(ids)} candidatas", t.ms))
-        weights = Weights.for_preference() if req.preference.strip() else Weights()
+        weights = self.rag.preference_weights if req.preference.strip() else self.rag.weights
         with _Timer() as t:
             suggestions, removed = rank([(self.by_id[i], sims.get(i, 0.0)) for i in ids], usable,
                                         restrictions=restrictions,
@@ -149,13 +150,15 @@ class ExplanationAgent:
 
 
 class Orchestrator:
-    def __init__(self, recipes: list[Recipe], vector: VectorIndex, llm: LLMClient | None):
+    def __init__(self, recipes: list[Recipe], vector: VectorIndex, llm: LLMClient | None,
+                 rag: RagConfig = RagConfig()):
+        self.rag = rag
         self.recipes = recipes
         self.lexical = LexicalIndex(recipes)
         self.llm = llm
         self.pantry_agent = PantryAgent(self.lexical.known_keys)
         self.restrictions_agent = RestrictionsAgent()
-        self.recipe_agent = RecipeAgent(recipes, vector, self.lexical)
+        self.recipe_agent = RecipeAgent(recipes, vector, self.lexical, rag)
         self.explanation_agent = ExplanationAgent(llm)
 
     def handle(self, req: Request) -> Result:
@@ -173,7 +176,7 @@ class Orchestrator:
         return Result(entries, expired, unknown, suggestions, removed, exp, trace, msg)
 
 
-def load_orchestrator() -> Orchestrator:
+def load_orchestrator(rag: RagConfig | None = None) -> Orchestrator:
     rp = config.recipes_path()
     if not rp.exists():
         raise DataNotReady("A base de receitas ainda não foi gerada.")
@@ -184,4 +187,4 @@ def load_orchestrator() -> Orchestrator:
         raise DataNotReady("O índice vetorial é de outra versão da base; gere o índice de novo.")
     recipes = load_recipes(rp)
     vector = VectorIndex(config.index_dir(), FastEmbedder())
-    return Orchestrator(recipes, vector, get_llm())
+    return Orchestrator(recipes, vector, get_llm(), rag or RagConfig())
