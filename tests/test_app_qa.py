@@ -47,7 +47,12 @@ def _fake_data(tmp_path, monkeypatch, manifest=None):
     monkeypatch.setenv("ZD_HOME", str(tmp_path))
     config.recipes_path().parent.mkdir(parents=True, exist_ok=True)
     config.recipes_path().write_text("x", encoding="utf-8")
-    monkeypatch.setattr(app_support, "read_manifest", lambda p: manifest)
+    if manifest is None:
+        def _raise():
+            raise DataNotReady("sem índice")
+        monkeypatch.setattr(app_support, "check_data_ready", _raise)
+    else:
+        monkeypatch.setattr(app_support, "check_data_ready", lambda: manifest)
 
 
 def test_build_no_data_raises_and_never_queries_registry(monkeypatch, tmp_path):
@@ -61,7 +66,6 @@ def test_build_no_data_raises_and_never_queries_registry(monkeypatch, tmp_path):
 
 def test_build_manifest_without_recipes_never_queries_registry(monkeypatch, tmp_path):
     monkeypatch.setenv("ZD_HOME", str(tmp_path))
-    monkeypatch.setattr(app_support, "read_manifest", lambda p: {"model": "m"})
     calls = []
     monkeypatch.setattr(app_support, "production_config", lambda *a, **k: calls.append(1))
     with pytest.raises(DataNotReady):
@@ -164,3 +168,10 @@ def test_app_data_tab_none_none_does_not_crash(monkeypatch, tmp_path):
     at = _app_with_fake_data(monkeypatch, tmp_path, ProductionInfo(None, None))
     assert not at.exception
     assert len(at.warning) >= 1
+
+
+@pytest.mark.parametrize("info", [ProductionInfo(5, None), ProductionInfo(None, "aviso")])
+def test_app_data_tab_shows_restart_note(monkeypatch, tmp_path, info):
+    at = _app_with_fake_data(monkeypatch, tmp_path, info)
+    assert not at.exception
+    assert any(c.value == app_support.RESTART_NOTE for c in at.caption)

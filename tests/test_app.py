@@ -40,6 +40,10 @@ def test_app_with_real_data_suggests(monkeypatch, tmp_path):
 
 
 def test_app_without_data_never_touches_registry(monkeypatch, tmp_path):
+    from zerodesperdicio import app_support
+
+    monkeypatch.setattr(app_support, "production_config",
+                        lambda *a, **k: pytest.fail("não deveria consultar o registro"))
     monkeypatch.setenv("ZD_HOME", str(tmp_path))
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:9")
     at = AppTest.from_file(APP, default_timeout=60).run()
@@ -64,22 +68,7 @@ def test_production_message_fallback_warns():
     assert (kind, text) == ("warning", "Registro indisponível")
 
 
-def test_build_orchestrator_passes_production_config(monkeypatch, tmp_path):
-    from zerodesperdicio import app_support
-    from zerodesperdicio.mlops.rag import ProductionInfo
-    from zerodesperdicio.rag_config import RagConfig
+def test_restart_note_text():
+    from zerodesperdicio.app_support import RESTART_NOTE
 
-    monkeypatch.setenv("ZD_HOME", str(tmp_path))
-    (tmp_path / "data" / "index").mkdir(parents=True)
-    from zerodesperdicio import config
-    config.recipes_path().parent.mkdir(parents=True, exist_ok=True)
-    config.recipes_path().write_text("x", encoding="utf-8")
-    monkeypatch.setattr(app_support, "read_manifest", lambda p: {"model": "m-idx"})
-    cfg, info = RagConfig(), ProductionInfo(7, None)
-    seen = {}
-    monkeypatch.setattr(app_support, "production_config",
-                        lambda idx_model: seen.update(idx=idx_model) or (cfg, info))
-    monkeypatch.setattr(app_support, "load_orchestrator", lambda rag=None: ("ORCH", rag))
-    out = app_support.build_orchestrator()
-    assert seen["idx"] == "m-idx"
-    assert out == (("ORCH", cfg), info)
+    assert RESTART_NOTE == "Promoções e voltas atrás valem após reiniciar o app."

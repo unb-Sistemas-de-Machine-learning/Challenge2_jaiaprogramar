@@ -13,7 +13,7 @@ import streamlit as st
 
 from zerodesperdicio import config
 from zerodesperdicio.agents import DataNotReady, Request
-from zerodesperdicio.app_support import build_orchestrator, production_message
+from zerodesperdicio.app_support import RESTART_NOTE, build_orchestrator, production_message
 from zerodesperdicio.index import read_manifest
 from zerodesperdicio.ingredient_rules import STAPLES
 from zerodesperdicio.pantry import ExpiryStatus, PantryItem, PantryState, PantryStore, assess
@@ -293,6 +293,7 @@ with tab_data:
     st.subheader("Versão em produção")
     kind, text = production_message(prod_info)
     getattr(st, kind)(text)
+    st.caption(RESTART_NOTE)
 
     st.subheader("Qualidade da recuperação")
     rep = config.reports_dir() / "retrieval_eval.json"

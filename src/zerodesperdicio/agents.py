@@ -176,7 +176,8 @@ class Orchestrator:
         return Result(entries, expired, unknown, suggestions, removed, exp, trace, msg)
 
 
-def load_orchestrator(rag: RagConfig | None = None) -> Orchestrator:
+def check_data_ready() -> dict:
+    """Confere base e índice; devolve o manifesto do índice ou lança `DataNotReady`."""
     rp = config.recipes_path()
     if not rp.exists():
         raise DataNotReady("A base de receitas ainda não foi gerada.")
@@ -185,6 +186,12 @@ def load_orchestrator(rag: RagConfig | None = None) -> Orchestrator:
         raise DataNotReady("O índice vetorial ainda não foi gerado.")
     if manifest.get("recipes_sha256") != hashlib.sha256(rp.read_bytes()).hexdigest():
         raise DataNotReady("O índice vetorial é de outra versão da base; gere o índice de novo.")
+    return manifest
+
+
+def load_orchestrator(rag: RagConfig | None = None) -> Orchestrator:
+    check_data_ready()
+    rp = config.recipes_path()
     recipes = load_recipes(rp)
     vector = VectorIndex(config.index_dir(), FastEmbedder())
     return Orchestrator(recipes, vector, get_llm(), rag or RagConfig())
