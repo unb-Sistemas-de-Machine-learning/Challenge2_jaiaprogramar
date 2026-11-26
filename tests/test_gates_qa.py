@@ -87,7 +87,6 @@ def test_load_gates_invalid_yaml_raises(tmp_path):
         load_gates(p)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: YAML cuja raiz é lista/escalar dá AttributeError em vez de ValueError")
 def test_load_gates_non_mapping_root_is_valueerror(tmp_path):
     p = tmp_path / "g.yaml"
     p.write_text("- a\n- b\n")
@@ -146,8 +145,8 @@ def test_load_gates_null_minimos(tmp_path):
 
 def test_load_gates_resolves_config_at_call_time(tmp_path, monkeypatch):
     p1, p2 = tmp_path / "1.yaml", tmp_path / "2.yaml"
-    p1.write_text("um:\n  tolerancia: 0.1\n")
-    p2.write_text("dois:\n  tolerancia: 0.1\n")
+    p1.write_text("um:\n  minimos: {a: 1}\n  tolerancia: 0.1\n")
+    p2.write_text("dois:\n  minimos: {a: 1}\n  tolerancia: 0.1\n")
     monkeypatch.setattr(config, "gates_file", lambda: p1)
     assert list(load_gates()) == ["um"]
     monkeypatch.setattr(config, "gates_file", lambda: p2)
