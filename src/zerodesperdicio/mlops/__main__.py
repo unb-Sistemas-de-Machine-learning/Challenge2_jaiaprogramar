@@ -1,0 +1,98 @@
+"""Comandos de terminal do registro: `python -m zerodesperdicio.mlops promote|rollback|status`.
+
+Códigos de saída: 0 sucesso, 1 promoção recusada pelo portão, 2 erro (mensagem em stderr).
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import subprocess
+import sys
+
+from zerodesperdicio.mlops import registry
+from zerodesperdicio.mlops.gates import load_gates
+from zerodesperdicio.mlops.registry import RegistryError
+
+
+def default_by() -> str:
+    """Quem fez a ação: `git config user.name`; se falhar ou vier vazio, o usuário do sistema."""
+    try:
+        out = subprocess.run(
+            ["git", "config", "user.name"], capture_output=True, text=True, timeout=5, check=True,
+        )
+        name = out.stdout.strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return getpass.getuser()
+
+
+def _nonempty(value: str) -> str:
+    if not value.strip():
+        raise argparse.ArgumentTypeError("valor obrigatório")
+    return value
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="python -m zerodesperdicio.mlops")
+    sub = parser.add_subparsers(dest="comando", required=True)
+
+    p = sub.add_parser("promote", help="promove uma versão para produção, passando pelo portão")
+    p.add_argument("--model", required=True, type=_nonempty)
+    p.add_argument("--version", required=True, type=int)
+    p.add_argument("--motivo", default="")
+    p.add_argument("--por", default=None)
+
+    r = sub.add_parser("rollback", help="volta a produção para outra versão, com motivo")
+    r.add_argument("--model", required=True, type=_nonempty)
+    r.add_argument("--version", required=True, type=int)
+    r.add_argument("--motivo", required=True)
+    r.add_argument("--por", default=None)
+
+    sub.add_parser("status", help="mostra a versão em produção de cada modelo")
+    return parser
+
+
+def _promote(args: argparse.Namespace) -> int:
+    result = registry.promote(
+        args.model, args.version, by=args.por or default_by(), reason=args.motivo
+    )
+    print("APROVADO" if result.aprovado else "RECUSADO")
+    for reason in result.razoes:
+        print(reason)
+    return 0 if result.aprovado else 1
+
+
+def _rollback(args: argparse.Namespace) -> int:
+    registry.rollback(args.model, args.version, by=args.por or default_by(), reason=args.motivo)
+    print(f"{args.model}: producao = v{args.version} (volta atrás registrada)")
+    return 0
+
+
+def _status(_args: argparse.Namespace) -> int:
+    for model, spec in load_gates().items():
+        prod = registry.production(model)
+        if prod is None:
+            print(f"{model}: nenhuma versão em produção")
+            continue
+        names = sorted({*spec.minimos, *spec.maximos})
+        metrics = ", ".join(f"{n}={prod.metrics[n]:.3f}" for n in names if n in prod.metrics)
+        print(f"{model}: producao = v{prod.version} ({metrics})")
+    return 0
+
+
+_COMMANDS = {"promote": _promote, "rollback": _rollback, "status": _status}
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    try:
+        return _COMMANDS[args.comando](args)
+    except (RegistryError, ValueError, OSError) as e:
+        print(f"Erro: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
