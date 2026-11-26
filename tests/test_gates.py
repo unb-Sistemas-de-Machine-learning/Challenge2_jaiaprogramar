@@ -128,3 +128,10 @@ def test_load_gates_non_mapping_root(tmp_path, text):
     p.write_text(text)
     with pytest.raises(ValueError):
         load_gates(p)
+
+
+def test_load_gates_malformed_yaml_is_value_error(tmp_path):
+    p = tmp_path / "gates.yaml"
+    p.write_text("a: [unclosed\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="gates.yaml inválido"):
+        load_gates(p)
