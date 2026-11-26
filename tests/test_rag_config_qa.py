@@ -167,40 +167,34 @@ def test_from_dict_non_numeric_string_weight_raises_valueerror():
         RagConfig.from_dict(_d(weights={"coverage": "abc", "urgency": 0.4, "semantic": 0.1}))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: peso None/lista levanta TypeError (float()) em vez de ValueError em português")
 @pytest.mark.parametrize("val", [None, [1]])
 def test_from_dict_bad_weight_type_raises_valueerror(val):
     with pytest.raises(ValueError):
         RagConfig.from_dict(_d(weights={"coverage": val, "urgency": 0.4, "semantic": 0.1}))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: from_dict aceita bool como peso (True vira 1.0) sem erro")
 def test_from_dict_rejects_bool_weight():
     with pytest.raises(ValueError):
         RagConfig.from_dict(_d(weights={"coverage": True, "urgency": 0.4, "semantic": 0.1}))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: from_dict aceita peso numérico em texto ('0.5') por coerção float()")
 def test_from_dict_rejects_numeric_string_weight():
     with pytest.raises(ValueError):
         RagConfig.from_dict(_d(weights={"coverage": "0.5", "urgency": 0.4, "semantic": 0.1}))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: from_dict aceita peso NaN/inf/negativo sem validar")
 @pytest.mark.parametrize("val", [float("nan"), float("inf"), -0.5])
 def test_from_dict_rejects_nonfinite_or_negative_weight(val):
     with pytest.raises(ValueError):
         RagConfig.from_dict(_d(weights={"coverage": val, "urgency": 0.4, "semantic": 0.1}))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: embedding_model não-string é coagido com str() (None vira 'None')")
 @pytest.mark.parametrize("val", [None, 3, ["a"]])
 def test_from_dict_rejects_non_string_embedding_model(val):
     with pytest.raises(ValueError):
         RagConfig.from_dict(_d(embedding_model=val))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: from_dict com entrada que não é dict levanta TypeError em vez de ValueError")
 @pytest.mark.parametrize("bad", [None, 3])
 def test_from_dict_non_dict_input(bad):
     with pytest.raises(ValueError):

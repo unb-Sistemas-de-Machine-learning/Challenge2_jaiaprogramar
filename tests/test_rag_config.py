@@ -36,19 +36,28 @@ def test_roundtrip():
     assert RagConfig.from_dict(json.loads(json.dumps(c.to_dict()))) == c
 
 
-def test_from_dict_rejects_bad_input():
-    d = RagConfig().to_dict()
-    bad_cases = [
-        {**d, "extra": 1},
-        {k: v for k, v in d.items() if k != "weights"},
-        {**d, "candidates_per_source": 0},
-        {**d, "weights": {"coverage": 1.0, "urgency": 0.0}},
-        {**d, "weights": {**d["weights"], "extra": 1}},
-        {**d, "preference_weights": {"coverage": 1.0, "urgency": 0.0, "semantic": 0.0, "x": 1}},
-    ]
-    for bad in bad_cases:
-        with pytest.raises(ValueError):
-            RagConfig.from_dict(bad)
+_D = RagConfig().to_dict()
+_W = _D["weights"]
+
+
+@pytest.mark.parametrize("bad", [
+    {**_D, "extra": 1},
+    {k: v for k, v in _D.items() if k != "weights"},
+    {**_D, "candidates_per_source": 0},
+    {**_D, "candidates_per_source": True},
+    {**_D, "candidates_per_source": "40"},
+    {**_D, "weights": {"coverage": 1.0, "urgency": 0.0}},
+    {**_D, "weights": {k: v for k, v in _W.items() if k != "semantic"}},
+    {**_D, "weights": {**_W, "extra": 1}},
+    {**_D, "preference_weights": {"coverage": 1.0, "urgency": 0.0, "semantic": 0.0, "x": 1}},
+    {**_D, "embedding_model": ""},
+    {**_D, "embedding_model": None},
+    {**_D, "weights": {**_W, "coverage": "0.5"}},
+    {**_D, "preference_weights": {**_W, "urgency": float("nan")}},
+])
+def test_from_dict_rejects_bad_input(bad):
+    with pytest.raises(ValueError):
+        RagConfig.from_dict(bad)
 
 
 def test_params_are_flat_strings():

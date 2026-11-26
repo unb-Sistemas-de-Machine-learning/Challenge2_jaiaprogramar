@@ -4,6 +4,7 @@ O formato de `to_dict` é o do artefato `rag_config.json` guardado no registro d
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from . import config
@@ -20,7 +21,13 @@ def _weights_to_dict(w: Weights) -> dict:
 def _weights_from_dict(name: str, d: object) -> Weights:
     if not isinstance(d, dict) or set(d) != set(_WEIGHT_KEYS):
         raise ValueError(f"'{name}' deve ter exatamente as chaves {', '.join(_WEIGHT_KEYS)}.")
-    return Weights(**{k: float(d[k]) for k in _WEIGHT_KEYS})
+    values = {}
+    for k in _WEIGHT_KEYS:
+        v = d[k]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
+            raise ValueError(f"'{name}.{k}' deve ser um número finito maior ou igual a 0.")
+        values[k] = float(v)
+    return Weights(**values)
 
 
 @dataclass(frozen=True)
@@ -38,16 +45,21 @@ class RagConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "RagConfig":
+        if not isinstance(d, dict):
+            raise ValueError("A configuração da recuperação deve ser um dicionário.")
         keys = set(d)
         missing, extra = set(_KEYS) - keys, keys - set(_KEYS)
         if missing:
             raise ValueError(f"Configuração da recuperação sem as chaves: {', '.join(sorted(missing))}.")
         if extra:
             raise ValueError(f"Configuração da recuperação com chaves desconhecidas: {', '.join(sorted(extra))}.")
+        model = d["embedding_model"]
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("'embedding_model' deve ser um texto não vazio.")
         n = d["candidates_per_source"]
         if not isinstance(n, int) or isinstance(n, bool) or n < 1:
             raise ValueError("'candidates_per_source' deve ser um inteiro maior ou igual a 1.")
-        return cls(embedding_model=str(d["embedding_model"]),
+        return cls(embedding_model=model,
                    weights=_weights_from_dict("weights", d["weights"]),
                    preference_weights=_weights_from_dict("preference_weights", d["preference_weights"]),
                    candidates_per_source=n)
