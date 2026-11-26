@@ -65,6 +65,16 @@ Limites em `mlops/gates.yaml` (versionado). Valores iniciais *(minha decisão: p
 | `zd-rag-receitas` | recall@10 ≥ 0,80 e MRR ≥ 0,45 | não cair mais de 0,02 |
 | `zd-explicacao` | citações válidas ≥ 95%; afirmações de "seguro" = 0 | não cair mais de 2 pontos |
 
+**Regras do portão** *(revisão de 26/11, depois do code review da primeira implementação)*:
+
+1. **Tudo o que vai para produção é medido.** Se um parâmetro da versão muda o comportamento do app, ele precisa ter uma métrica no portão. No `zd-rag-receitas`, os pesos usados quando a pessoa escreve uma preferência (`preference_weights`) ganham uma segunda passada do teste "known item", com preferência preenchida, e as métricas `pref_hybrid_recall_at_10` e `pref_hybrid_mrr`.
+2. **Métricas só de comparação.** Uma métrica ainda sem mínimo absoluto acordado entra em `comparar:` no `gates.yaml`. Ela não pode piorar além da tolerância em relação à produção, mas não tem piso. O piso vem depois, por ADR, a partir dos números medidos.
+3. **Mesmo conjunto quer dizer mesmos dados.** A identidade do conjunto de avaliação inclui o hash da base (`known_item:n=…:seed=…:keep=…:dados=<12 primeiros caracteres do sha256>`). Uma versão em produção sem essa identidade conta como conjunto diferente.
+4. **Conjunto novo.** Quando a base muda, o portão recusa a comparação. A promoção só pode ser feita de forma explícita, com `make promote … CONJUNTO_NOVO=1 MOTIVO=<texto>`: o motivo é obrigatório, valem só os mínimos absolutos, e o evento vai para o log como `promocao_conjunto_novo`. O app avisa quando a versão em produção foi avaliada com outra base, mas continua usando essa versão.
+5. **Limites válidos.** Todo limite e toda tolerância do `gates.yaml` precisam ser números finitos, e a tolerância precisa ser ≥ 0.
+6. **A marca só muda quando tudo deu certo.** Primeiro as tags da versão, depois a marca, depois o log. Se qualquer passo falhar, a marca volta para a versão anterior e as tags gravadas são removidas. Uma recusa é sempre mostrada com as razões, mesmo que o log não possa ser gravado.
+7. **O modelo de embeddings é o da configuração.** O app e a avaliação geram os vetores da consulta com `RagConfig.embedding_model`. Se o índice foi gerado com outro modelo, os dados contam como "não prontos" (gere o índice de novo).
+
 Comandos: `make promote MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (roda o portão e só move a marca se aprovar; `MOTIVO` opcional), `make rollback MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (move a marca; `MOTIVO` obrigatório) e `make status` (versão em produção de cada modelo). Promover ou voltar para a versão que já está em produção não faz nada e não gera evento no log. Cada promoção e retorno fica nas tags do registro e em `reports/promocoes.jsonl`.
 
 ### Dados e pipeline
