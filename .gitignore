@@ -9,3 +9,6 @@ data/index/
 data/user/
 data/models/
 .superpowers/
+mlruns/
+*.egg-info/
+reports/promocoes.jsonl

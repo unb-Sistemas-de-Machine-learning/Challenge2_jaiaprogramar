@@ -50,3 +50,8 @@ def model_cache() -> Path:
 
 def reports_dir() -> Path:
     return root() / "reports"
+
+
+def gates_file() -> Path:
+    # O portão é código versionado: não segue ZD_HOME.
+    return _REPO_ROOT / "mlops" / "gates.yaml"

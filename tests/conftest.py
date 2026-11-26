@@ -1,3 +1,7 @@
+import uuid
+
+import pytest
+
 from zerodesperdicio.recipes import Recipe
 
 
@@ -39,3 +43,15 @@ class FakeEmbedder:
             if n:
                 out[i] /= n
         return out
+
+
+@pytest.fixture(scope="session")
+def _mlflow_db(tmp_path_factory):
+    return f"sqlite:///{tmp_path_factory.mktemp('mlflow') / 'mlflow.db'}"
+
+
+@pytest.fixture
+def registry_env(_mlflow_db, monkeypatch, tmp_path):
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", _mlflow_db)
+    monkeypatch.setenv("ZD_HOME", str(tmp_path))
+    return f"zd-teste-{uuid.uuid4().hex[:8]}"  # nome de modelo exclusivo do teste
