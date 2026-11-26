@@ -65,7 +65,7 @@ Limites em `mlops/gates.yaml` (versionado). Valores iniciais *(minha decisão: p
 | `zd-rag-receitas` | recall@10 ≥ 0,80 e MRR ≥ 0,45 | não cair mais de 0,02 |
 | `zd-explicacao` | citações válidas ≥ 95%; afirmações de "seguro" = 0 | não cair mais de 2 pontos |
 
-Comandos: `make promote MODEL=<nome> VERSION=<n>` (roda o portão e só move a marca se aprovar) e `make rollback MODEL=<nome> VERSION=<n>` (move a marca e registra o motivo). Cada promoção e retorno fica nas tags do registro e em `reports/promocoes.jsonl`.
+Comandos: `make promote MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (roda o portão e só move a marca se aprovar; `MOTIVO` opcional), `make rollback MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (move a marca; `MOTIVO` obrigatório) e `make status` (versão em produção de cada modelo). Promover ou voltar para a versão que já está em produção não faz nada e não gera evento no log. Cada promoção e retorno fica nas tags do registro e em `reports/promocoes.jsonl`.
 
 ### Dados e pipeline
 

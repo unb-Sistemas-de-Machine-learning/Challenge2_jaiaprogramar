@@ -72,9 +72,9 @@ make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="v2 piorou"     # volta atr
 make mlflow-ui                                         # interface do MLflow em http://localhost:5000
 ```
 
-`make promote` sai com código 1 se o portão recusar (e mostra as razões); `make rollback` não passa pelo portão. Se `promote` ou `rollback` falharem por versão ou modelo inexistente, a marca não muda.
+O CLI sai com código 1 quando o portão recusa (e mostra as razões); o make mostra o erro e sai com status diferente de zero. `make rollback` não passa pelo portão. Promover a versão que já está em produção, ou voltar para ela, não faz nada e não gera evento no log. Se `promote` ou `rollback` falharem por versão ou modelo inexistente, a marca não muda.
 
-**Exemplo de fluxo.** Para testar pesos novos sem editar código, grave um JSON com a configuração (`RagConfig`) e avalie com `--config`. O `make eval` não repassa argumentos, então use o comando direto:
+**Exemplo de fluxo.** Para testar pesos novos sem editar código, grave um JSON com a configuração (`RagConfig`) e avalie com `--config`. O `embedding_model` do JSON precisa ser o mesmo do índice; se for diferente, a avaliação aborta. O `make eval` não repassa argumentos, então use o comando direto:
 
 ```bash
 .venv/bin/python -m zerodesperdicio.evaluation retrieval --config arq.json --registrar
@@ -87,7 +87,7 @@ make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="queda de qualidade"
 
 **Onde ficam as coisas**
 - `mlruns/` (banco SQLite `mlflow.db` e artefatos): local e ignorado no git, sempre na raiz do projeto, de qualquer pasta que o comando rode.
-- `reports/promocoes.jsonl`: uma linha por promoção, recusa ou volta atrás (quando, modelo, ação, de/para, quem, motivo, razões, métricas). Não vai para o git.
+- `reports/promocoes.jsonl`: uma linha por promoção, recusa ou volta atrás (quando, modelo, ação, de/para, quem, motivo, razões, métricas). Não vai para o git (está no `.gitignore`): o log é local por máquina enquanto o armazenamento compartilhado estiver em aberto.
 - `MLFLOW_TRACKING_URI`: aponta para outro servidor do MLflow em vez do SQLite local (`make mlflow-ui` abre só o banco local).
 
 **No app.** O app carrega a configuração do `zd-rag-receitas` marcada como `producao` e mostra a versão na aba "Dados e métricas". Se o registro estiver vazio, sem a marca, fora do ar ou incompatível, o app **não para**: usa a configuração padrão do código e mostra um aviso. Promoções e voltas atrás só valem depois de reiniciar o app.
@@ -100,7 +100,7 @@ src/zerodesperdicio/   pipeline.py · wikibooks.py · ingredients.py · ingredie
                        rag_config.py · app_support.py
                        mlops/ (gates.py · registry.py · rag.py · __main__.py)
 app/streamlit_app.py   interface
-mlops/gates.yaml     limites do portão de promoção
+mlops/gates.yaml       limites do portão de promoção
 tests/                 testes (pytest), sem rede
 docs/adr/              decisões de arquitetura
 docs/superpowers/plans plano de implementação deste MVP

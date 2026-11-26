@@ -11,3 +11,4 @@ data/models/
 .superpowers/
 mlruns/
 *.egg-info/
+reports/promocoes.jsonl
