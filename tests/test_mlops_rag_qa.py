@@ -49,7 +49,8 @@ def test_production_config_bad_artifact_falls_back(registry_env, artifacts):
     _promote(registry_env, v)
     got, info = rag.production_config(None, model=registry_env)
     assert got == RagConfig() and info.version is None
-    assert "indisponível" in info.warning and "configuração padrão" in info.warning
+    assert "configuração inválida" in info.warning and f"v{v.version}" in info.warning
+    assert "indisponível" not in info.warning and "configuração padrão" in info.warning
 
 
 def test_production_config_registry_error_warns_unavailable(monkeypatch):
