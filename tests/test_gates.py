@@ -86,3 +86,45 @@ def test_gates_file_is_in_repo_and_ignores_zd_home(monkeypatch, tmp_path):
     monkeypatch.setenv("ZD_HOME", str(tmp_path))
     f = config.gates_file()
     assert f.name == "gates.yaml" and f.parent.name == "mlops" and f.exists()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_gate_non_finite_candidate_refuses(bad):
+    for metric in ("recall", "seguro"):  # um mínimo e um máximo
+        r = check_gate(SPEC, {**OK, metric: bad}, None, candidate_set="a", production_set=None)
+        assert not r.aprovado
+        assert any(metric in x and "não é um número válido" in x for x in r.razoes)
+
+
+def test_gate_non_finite_production_refuses():
+    # Decisão: produção não finita recusa a promoção (nunca aprova por comparação com NaN).
+    for metric in ("recall", "seguro"):
+        prod = {**OK, metric: float("nan")}
+        r = check_gate(SPEC, OK, prod, candidate_set="a", production_set="a")
+        assert not r.aprovado
+        assert any(metric in x and "produção" in x and "não é um número válido" in x for x in r.razoes)
+
+
+def test_load_gates_rejects_unknown_key(tmp_path):
+    p = tmp_path / "g.yaml"
+    p.write_text("m: {minmos: {a: 1}, minimos: {b: 1}, tolerancia: 0.1}")
+    with pytest.raises(ValueError, match="minmos"):
+        load_gates(p)
+
+
+def test_load_gates_rejects_model_without_limits(tmp_path):
+    p = tmp_path / "g.yaml"
+    p.write_text("m: {minimos: {}, tolerancia: 0.1}")
+    with pytest.raises(ValueError, match="limite"):
+        load_gates(p)
+    p.write_text("m: {tolerancia: 0.1}")
+    with pytest.raises(ValueError, match="limite"):
+        load_gates(p)
+
+
+@pytest.mark.parametrize("text", ["- a\n- b\n", "3\n", "just text\n"])
+def test_load_gates_non_mapping_root(tmp_path, text):
+    p = tmp_path / "g.yaml"
+    p.write_text(text)
+    with pytest.raises(ValueError):
+        load_gates(p)

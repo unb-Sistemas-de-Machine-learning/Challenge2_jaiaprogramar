@@ -69,7 +69,11 @@ def test_production_config_invalid_artifact_falls_back(monkeypatch):
     monkeypatch.setattr(registry, "production", lambda model: v)
     monkeypatch.setattr(registry, "load_artifact", lambda ver, name: {"lixo": 1})
     got, info = rag.production_config(None)
-    assert got == RagConfig() and "indisponível" in info.warning
+    assert got == RagConfig() and "configuração inválida" in info.warning and "v3" in info.warning
+
+
+def test_metric_names_cover_real_gate():
+    assert set(load_gates()["zd-rag-receitas"].minimos) <= set(rag.metrics_from_eval(RESULT))
 
 
 # ---- evaluation.main ----
@@ -90,6 +94,7 @@ def fake_eval(monkeypatch, tmp_path):
         return _FakeOrch()
 
     monkeypatch.setattr("zerodesperdicio.agents.load_orchestrator", fake_load)
+    monkeypatch.setattr(evaluation, "read_manifest", lambda path: {"model": RagConfig().embedding_model})
     monkeypatch.setattr(evaluation, "known_item_eval", lambda orch, n=300: dict(RESULT, n=n))
     return seen
 
@@ -156,3 +161,15 @@ def test_main_registrar_registry_error(fake_eval, monkeypatch):
 def test_main_without_registrar_does_not_register(fake_eval, monkeypatch):
     monkeypatch.setattr(rag, "register_candidate", lambda *a, **k: pytest.fail("não deveria registrar"))
     _run(monkeypatch)
+
+
+def test_main_refuses_embedding_different_from_index(fake_eval, monkeypatch, tmp_path):
+    cfg = RagConfig(embedding_model="outro-modelo")
+    f = tmp_path / "c.json"
+    f.write_text(json.dumps(cfg.to_dict()), encoding="utf-8")
+    monkeypatch.setattr(rag, "register_candidate", lambda *a, **k: pytest.fail("não deveria registrar"))
+    with pytest.raises(SystemExit) as e:
+        _run(monkeypatch, "--config", str(f), "--registrar")
+    msg = str(e.value)
+    assert "outro-modelo" in msg and RagConfig().embedding_model in msg and "gere o índice de novo" in msg
+    assert "rag" not in fake_eval  # abortou antes de carregar o orquestrador

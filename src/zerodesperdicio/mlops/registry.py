@@ -43,10 +43,22 @@ def tracking_uri() -> str:
     return f"sqlite:///{folder}/mlflow.db"
 
 
-def _client():
+def _prepare_mlflow() -> None:
+    """Ajusta o ambiente do cliente; precisa rodar antes de QUALQUER import do mlflow."""
     os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "0")
     os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "5")
     os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
+
+
+def _mlflow_exception():
+    _prepare_mlflow()
+    from mlflow.exceptions import MlflowException
+
+    return MlflowException
+
+
+def _client():
+    _prepare_mlflow()
     from mlflow import MlflowClient
 
     uri = tracking_uri()
@@ -60,7 +72,7 @@ def _is_not_found(exc: Exception) -> bool:
 def _artifact_location(uri: str, model: str) -> str | None:
     prefix = "sqlite:///"
     if uri.startswith(prefix):
-        return (Path(uri[len(prefix):]).parent / "artifacts" / model).as_uri()
+        return (Path(uri[len(prefix):]).resolve().parent / "artifacts" / model).as_uri()
     return None  # servidor remoto: ele decide
 
 
@@ -76,7 +88,7 @@ def _git_commit() -> str:
 
 
 def _experiment_id(client, model: str) -> str:
-    from mlflow.exceptions import MlflowException
+    MlflowException = _mlflow_exception()
 
     try:
         exp = client.get_experiment_by_name(model)
@@ -88,7 +100,10 @@ def _experiment_id(client, model: str) -> str:
 
 
 def _to_version(client, mv) -> Version:
-    run = client.get_run(mv.run_id)
+    try:
+        run = client.get_run(mv.run_id)
+    except _mlflow_exception() as e:
+        raise RegistryError(f"Não foi possível ler o run da versão {mv.version} de {mv.name}: {e}") from e
     tags = {k: v for k, v in run.data.tags.items() if not k.startswith("mlflow.")}
     tags.update({k: v for k, v in (mv.tags or {}).items() if not k.startswith("mlflow.")})
     return Version(
@@ -111,7 +126,7 @@ def log_candidate(
     tags: dict[str, str] | None = None,
 ) -> Version:
     """Registra uma candidata: um run com parâmetros, métricas e configuração, e uma nova versão."""
-    from mlflow.exceptions import MlflowException
+    MlflowException = _mlflow_exception()
 
     client = _client()
     exp_id = _experiment_id(client, model)
@@ -142,7 +157,7 @@ def log_candidate(
 
 
 def get_version(model: str, version: int) -> Version:
-    from mlflow.exceptions import MlflowException
+    MlflowException = _mlflow_exception()
 
     client = _client()
     try:
@@ -154,22 +169,33 @@ def get_version(model: str, version: int) -> Version:
 
 
 def production(model: str) -> Version | None:
-    from mlflow.exceptions import MlflowException
-
+    """Versão com a marca `producao`, ou None se o modelo ou a marca não existem."""
+    MlflowException = _mlflow_exception()
     client = _client()
     try:
         mv = client.get_model_version_by_alias(model, ALIAS)
     except MlflowException as e:
-        # Modelo ausente -> RESOURCE_DOES_NOT_EXIST; marca ausente em modelo existente
-        # -> INVALID_PARAMETER_VALUE (comportamento do MLflow 3.18).
-        if getattr(e, "error_code", None) in (_NOT_FOUND, "INVALID_PARAMETER_VALUE"):
+        code = getattr(e, "error_code", None)
+        if code == _NOT_FOUND:  # modelo inexistente
             return None
+        if code == "INVALID_PARAMETER_VALUE":
+            # O MLflow 3.18 usa este código para marca ausente em modelo existente,
+            # mas também para outros 400: só vale como "sem marca" se o modelo existe
+            # e realmente não tem a marca.
+            try:
+                rm = client.get_registered_model(model)
+            except MlflowException as e2:
+                if getattr(e2, "error_code", None) == _NOT_FOUND:
+                    return None
+                raise RegistryError(f"Não foi possível consultar o registro: {e2}") from e2
+            if ALIAS not in (rm.aliases or {}):
+                return None
         raise RegistryError(f"Não foi possível consultar o registro: {e}") from e
     return _to_version(client, mv)
 
 
 def load_artifact(v: Version, name: str) -> dict:
-    from mlflow.exceptions import MlflowException
+    MlflowException = _mlflow_exception()
 
     try:
         local = _client().download_artifacts(v.run_id, f"config/{name}")
@@ -189,8 +215,28 @@ def _append_log(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def _restore_alias(client, model: str, previous: int | None) -> None:
+    if previous is None:
+        client.delete_registered_model_alias(model, ALIAS)
+    else:
+        client.set_registered_model_alias(model, ALIAS, str(previous))
+
+
+def _log_or_undo(client, model: str, previous: int | None, entry: dict) -> None:
+    """Grava o evento; se falhar, desfaz a mudança da marca e avisa."""
+    try:
+        _append_log(entry)
+    except OSError as e:
+        try:
+            _restore_alias(client, model, previous)
+            undone = "A marca foi restaurada."
+        except Exception:
+            undone = "ATENÇÃO: não foi possível restaurar a marca anterior."
+        raise RegistryError(f"Não foi possível gravar o log de promoções ({e}). {undone}") from e
+
+
 def _set_alias(client, model: str, version: int, tags: dict[str, str]) -> None:
-    from mlflow.exceptions import MlflowException
+    MlflowException = _mlflow_exception()
 
     try:
         client.set_registered_model_alias(model, ALIAS, str(version))
@@ -225,11 +271,11 @@ def promote(
         candidate_set=candidate.tags.get("conjunto_avaliacao", ""),
         production_set=current.tags.get("conjunto_avaliacao") if current else None,
     )
+    client = _client()
     if result.aprovado:
-        when = _now()
-        _set_alias(_client(), model, version,
-                   {"promovida_em": when, "promovida_por": by, "motivo": reason})
-    _append_log({
+        _set_alias(client, model, version,
+                   {"promovida_em": _now(), "promovida_por": by, "motivo": reason})
+    entry = {
         "quando": _now(),
         "modelo": model,
         "acao": "promocao" if result.aprovado else "promocao_recusada",
@@ -239,7 +285,11 @@ def promote(
         "motivo": reason,
         "razoes": result.razoes,
         "metricas": candidate.metrics,
-    })
+    }
+    if result.aprovado:
+        _log_or_undo(client, model, current.version if current else None, entry)
+    else:
+        _append_log(entry)
     return result
 
 
@@ -249,9 +299,12 @@ def rollback(model: str, version: int, *, by: str, reason: str) -> None:
         raise RegistryError("Informe o motivo da volta atrás.")
     target = get_version(model, version)
     current = production(model)
-    _set_alias(_client(), model, version,
+    if current is not None and current.version == version:
+        return  # já é a produção: nada a fazer, nem evento no log
+    client = _client()
+    _set_alias(client, model, version,
                {"retorno_em": _now(), "retorno_por": by, "motivo": reason})
-    _append_log({
+    _log_or_undo(client, model, current.version if current else None, {
         "quando": _now(),
         "modelo": model,
         "acao": "retorno",
@@ -261,4 +314,5 @@ def rollback(model: str, version: int, *, by: str, reason: str) -> None:
         "motivo": reason,
         "razoes": [],
         "metricas": target.metrics,
-    })
+    }
+)

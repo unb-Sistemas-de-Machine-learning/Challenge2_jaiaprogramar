@@ -91,8 +91,8 @@ def test_rollback_to_version_already_in_production(registry_env, tmp_path):
     registry.promote(m, 1, by="a", gates=G(m))
     registry.rollback(m, 1, by="b", reason="confirmar")
     assert registry.production(m).version == 1
-    e = read_log(tmp_path)[-1]
-    assert e["acao"] == "retorno" and e["de"] == 1 and e["para"] == 1
+    # voltar para a versão que já está em produção não faz nada e não gera evento
+    assert [e["acao"] for e in read_log(tmp_path)] == ["promocao"]
 
 
 def test_rollback_without_prior_production(registry_env, tmp_path):

@@ -28,4 +28,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["ignore::DeprecationWarning:chromadb.*"]
+filterwarnings = [
+    "ignore::DeprecationWarning:chromadb.*",
+    # Aviso interno do mlflow/sqlalchemy ao criar o banco; não é do nosso código.
+    "ignore:The ``noload`` loader strategy is deprecated:sqlalchemy.exc.SADeprecationWarning",
+]

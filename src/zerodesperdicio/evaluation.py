@@ -17,6 +17,7 @@ from datetime import date, datetime, timezone
 from . import config
 from .agents import Orchestrator, Request
 from .ingredient_rules import STAPLES
+from .index import read_manifest
 from .ingredients import ingredient_key
 from .llm import LLMClient
 from .pantry import PantryItem, assess
@@ -116,6 +117,10 @@ def main() -> None:
     ap.add_argument("--registrar", action="store_true", help="registra o resultado como candidata no MLflow")
     args = ap.parse_args()
     rag_cfg = _load_rag_config(args.config) if args.config else RagConfig()
+    manifest = read_manifest(config.index_dir())
+    if manifest is not None and manifest.get("model") != rag_cfg.embedding_model:
+        raise SystemExit(f"O índice foi gerado com {manifest.get('model')}, mas a configuração pede "
+                         f"{rag_cfg.embedding_model}; gere o índice de novo com o modelo da configuração.")
     orch = load_orchestrator(rag_cfg)
     res = known_item_eval(orch, n=args.n)
     res["evaluated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")

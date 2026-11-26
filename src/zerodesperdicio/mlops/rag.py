@@ -46,7 +46,12 @@ def production_config(index_model: str | None, *, model: str = MODEL) -> tuple[R
         if v is None:
             return RagConfig(), ProductionInfo(
                 None, f"Nenhuma versão de {model} marcada como producao; usando a configuração padrão do código.")
-        cfg = RagConfig.from_dict(registry.load_artifact(v, _ARTIFACT))
+        try:
+            cfg = RagConfig.from_dict(registry.load_artifact(v, _ARTIFACT))
+        except Exception as e:  # noqa: BLE001 - artefato ausente, ilegível ou inválido
+            return RagConfig(), ProductionInfo(
+                None, f"A versão v{v.version} de {model} tem configuração inválida ({e}); "
+                      "usando a configuração padrão do código.")
         if index_model is not None and cfg.embedding_model != index_model:
             return RagConfig(), ProductionInfo(
                 None, f"O índice foi gerado com o modelo de embeddings {index_model}, mas a versão {v.version} "
