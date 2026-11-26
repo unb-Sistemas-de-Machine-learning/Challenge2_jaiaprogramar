@@ -4,7 +4,8 @@ Recuperação ("known item"): sorteia receitas da base, monta uma despensa com 7
 ingredientes de cada uma e mede se a própria receita volta entre as k primeiras.
 
 Uso:
-    python -m zerodesperdicio.evaluation retrieval   # grava reports/retrieval_eval.json
+    python -m zerodesperdicio.evaluation retrieval [--n N] [--config ARQ.json] [--registrar]
+    # grava reports/retrieval_eval.json; --registrar cria a candidata no MLflow
 """
 from __future__ import annotations
 
@@ -83,22 +84,56 @@ def outside_pantry_rate(ingredient_names: list[str], pantry_keys: set[str], stap
     return sum(1 for k in keys if k not in pantry_keys and k not in staples) / len(keys)
 
 
+def _load_rag_config(path: str):
+    """Lê um RagConfig de um arquivo JSON; qualquer problema vira uma mensagem clara."""
+    from pathlib import Path
+
+    from .rag_config import RagConfig
+
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as e:
+        raise SystemExit(f"Não foi possível ler o arquivo de configuração {path}: {e}") from e
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"O arquivo de configuração {path} não é um JSON válido: {e}") from e
+    try:
+        return RagConfig.from_dict(data)
+    except ValueError as e:
+        raise SystemExit(f"Configuração inválida em {path}: {e}") from e
+
+
 def main() -> None:
     import argparse
+    import hashlib
 
     from .agents import load_orchestrator
+    from .rag_config import RagConfig
 
     ap = argparse.ArgumentParser(description="Avaliação do ZeroDesperdício")
     ap.add_argument("step", choices=["retrieval"])
     ap.add_argument("--n", type=int, default=300)
-    ap.parse_args()
-    orch = load_orchestrator()
-    res = known_item_eval(orch, n=ap.parse_args().n)
+    ap.add_argument("--config", metavar="ARQ.json", help="RagConfig em JSON, para experimentar pesos sem editar código")
+    ap.add_argument("--registrar", action="store_true", help="registra o resultado como candidata no MLflow")
+    args = ap.parse_args()
+    rag_cfg = _load_rag_config(args.config) if args.config else RagConfig()
+    orch = load_orchestrator(rag_cfg)
+    res = known_item_eval(orch, n=args.n)
     res["evaluated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     out = config.reports_dir() / "retrieval_eval.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res, indent=2), encoding="utf-8")
     print(json.dumps(res, indent=2))
+    if args.registrar:
+        from .mlops import rag as mlops_rag
+        from .mlops.registry import RegistryError
+
+        sha = hashlib.sha256(config.recipes_path().read_bytes()).hexdigest()
+        try:
+            v = mlops_rag.register_candidate(res, rag_cfg, sha)
+        except RegistryError as e:
+            raise SystemExit(str(e)) from e
+        print(f"{mlops_rag.MODEL}: candidata v{v.version} registrada "
+              f"(make promote MODEL={mlops_rag.MODEL} VERSION={v.version})")
 
 
 if __name__ == "__main__":
