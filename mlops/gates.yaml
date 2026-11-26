@@ -1,0 +1,12 @@
+# Portão de promoção (ADR 0007). Mudar um limite exige ADR.
+# minimos: maior é melhor; maximos: menor é melhor; tolerancia: quanto pode piorar contra a producao.
+zd-rag-receitas:
+  minimos: {hybrid_recall_at_10: 0.80, hybrid_mrr: 0.45}
+  tolerancia: 0.02
+zd-frescor:
+  minimos: {f1_macro: 0.85, recall_estragado: 0.85}
+  tolerancia: 0.01
+zd-explicacao:
+  minimos: {citacoes_validas: 0.95}
+  maximos: {afirmacoes_seguro: 0}
+  tolerancia: 0.02
