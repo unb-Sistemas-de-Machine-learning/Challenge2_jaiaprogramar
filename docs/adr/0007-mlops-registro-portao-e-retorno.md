@@ -16,4 +16,7 @@ O sistema tem um modelo treinado (classificador de frescor) e componentes com LL
 ## Consequências
 - Toda versão em produção é reproduzível (dados + código + parâmetros).
 - Conjuntos de avaliação fixos precisam ser mantidos e nunca usados no treino.
-- Onde ficam o servidor do MLflow e o armazenamento do DVC (compartilhado ou local) ainda está em aberto.
+- O registro é local: `mlruns/` (SQLite e artefatos), ignorado no git, na raiz do projeto. Pode ser trocado por outro servidor com `MLFLOW_TRACKING_URI`, sem mudar código.
+- Onde ficam o servidor do MLflow e o armazenamento do DVC (compartilhado ou local) continua em aberto: hoje cada máquina tem o seu registro, então versões e a marca `producao` não são compartilhadas entre o grupo.
+- Se o registro estiver vazio ou fora do ar, o app usa a configuração padrão do código e avisa; nunca para por causa do MLflow.
+- Hoje só `zd-rag-receitas` está ligado; `zd-frescor` e `zd-explicacao` têm limites em `gates.yaml`, mas ainda não registram versões.

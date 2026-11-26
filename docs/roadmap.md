@@ -25,7 +25,7 @@ Papéis segundo Kreuzberger, Kühl e Hirschl (2023). Em equipe pequena, cada pes
 - [ ] Base de frescor baixada, licença confirmada, versionada no DVC (Eduardo)
 - [ ] Linha de base zero-shot e primeiro classificador treinado (Vitor) — ADR 0005
 - [ ] PDFs divididos em trechos com página e 30 perguntas de avaliação (Gabriel) — ADR 0006
-- [ ] MLflow com registro de versões, marca `producao`, portão de promoção e volta atrás; DVC no pipeline (Pedro) — ADR 0007
+- [~] Parcial: registro, marca `producao`, portão e volta atrás feitos (zd-rag-receitas); DVC no pipeline pendente (Pedro) — ADR 0007
 
 ## Semana 5 — 23 a 29/11: integração completa
 

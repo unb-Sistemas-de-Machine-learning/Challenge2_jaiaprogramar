@@ -65,15 +65,17 @@ Limites em `mlops/gates.yaml` (versionado). Valores iniciais *(minha decisão: p
 | `zd-rag-receitas` | recall@10 ≥ 0,80 e MRR ≥ 0,45 | não cair mais de 0,02 |
 | `zd-explicacao` | citações válidas ≥ 95%; afirmações de "seguro" = 0 | não cair mais de 2 pontos |
 
-Comandos: `make promote MODEL=<nome> VERSION=<n>` (roda o portão e só move a marca se aprovar) e `make rollback MODEL=<nome> VERSION=<n>` (move a marca e registra o motivo). Cada promoção e retorno fica nas tags do registro e em `reports/promocoes.jsonl`.
+Comandos: `make promote MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (roda o portão e só move a marca se aprovar; `MOTIVO` opcional), `make rollback MODEL=<nome> VERSION=<n> MOTIVO=<texto>` (move a marca; `MOTIVO` obrigatório) e `make status` (versão em produção de cada modelo). Promover ou voltar para a versão que já está em produção não faz nada e não gera evento no log. Cada promoção e retorno fica nas tags do registro e em `reports/promocoes.jsonl`.
 
 ### Dados e pipeline
 
 - DVC versiona `data/raw`, `data/processed`, `data/eval` e os índices.
 - `dvc.yaml` encadeia: receitas (`fetch → build → index → eval`) e frescor (`preparar → treinar → avaliar`). Cada etapa registra no MLflow.
 - Conjuntos de avaliação ficam em `data/eval/` com hash no manifesto. Um teste garante que nenhum arquivo de avaliação aparece no treino.
-- Contrato com o Eduardo: imagens em `data/raw/frescor/<produto>__<fresco|estragado>/*.jpg`.
-- Contrato com o Vitor: o treino fica em `src/zerodesperdicio/freshness/train.py`, recebe vetores e rótulos e devolve o modelo. O MLOps entrega uma linha de base funcionando (regressão logística) para o pipeline rodar de ponta a ponta antes das melhorias do Vitor *(minha decisão)*.
+- Contrato com o Eduardo *(decisão de 26/11: adaptar aos caminhos já usados por Eduardo e Vitor)*: `datasets/freshness/organized/{produto_fresco,produto_estragado}/<produto>/` + `manifest.csv`; entram só as linhas com `status == accepted`.
+- Contrato com o Vitor *(decisão de 26/11: adaptar aos caminhos já usados por Eduardo e Vitor)*: o treino continua em `zerodesperdicio.vision.train_classifier`. O registro passa a ser `registry.log_candidate("zd-frescor", ..., eval_set=<sha256 do manifesto do conjunto de teste>)` com as métricas `f1_macro` e `recall_estragado`, no lugar de `vision/mlflow_tracking.py` (o portão próprio de 0,80 sai). Imagens e `.joblib` saem do git e vão para o DVC.
+- Métricas do portão (nomes reais, sem `@`, em `mlops/gates.yaml`): `zd-rag-receitas` usa `hybrid_recall_at_10` e `hybrid_mrr`; `zd-frescor` usa `f1_macro` e `recall_estragado`; `zd-explicacao` usa `citacoes_validas` e `afirmacoes_seguro` (máximo 0).
+- Log de promoções: `reports/promocoes.jsonl`, uma linha JSON por evento, com as chaves `quando` (UTC, ISO 8601), `modelo`, `acao` (`promocao`, `promocao_recusada` ou `retorno`), `de` (versão anterior em produção ou `null`), `para`, `por`, `motivo`, `razoes` (lista) e `metricas` (da versão de destino). O mesmo vai para as tags da versão (`promovida_em`/`promovida_por` ou `retorno_em`/`retorno_por`, e `motivo`).
 
 ### CI (GitHub Actions)
 

@@ -4,7 +4,7 @@ Assistente de IA que ajuda a decidir **o que fazer com os alimentos de casa ante
 
 Challenge 2 · Big Idea "Qualidade de Vida". Visão geral do projeto: [ZeroDesperdicio_visao_geral.pdf](ZeroDesperdicio_visao_geral.pdf).
 
-> **Estado: MVP de demonstração (v0.1, 11/11/2026).** Cobre o RAG e o sistema multiagentes (semanas 2 e 3 do roadmap). Visão computacional, MLflow/DVC/CI e retreino ficam para as próximas semanas.
+> **Estado: MVP de demonstração (v0.1, 11/11/2026).** Cobre o RAG e o sistema multiagentes (semanas 2 e 3 do roadmap). O registro de versões do RAG no MLflow, com portão de promoção e volta atrás, também está pronto (seção MLOps). Visão computacional, DVC no pipeline, CI e retreino ficam para as próximas semanas.
 
 ## Como rodar
 
@@ -15,7 +15,7 @@ make setup    # cria .venv e instala as dependências
 make fetch    # baixa o Livro de receitas do Wikilivros (~5 min; respeita o limite da API e é retomável)
 make build    # gera data/processed/recipes.jsonl + manifest.json
 make index    # gera o índice vetorial (baixa o modelo de embeddings, ~220 MB, na 1ª vez)
-make eval     # mede a recuperação -> reports/retrieval_eval.json
+make eval     # mede a recuperação -> reports/retrieval_eval.json e registra uma candidata no MLflow
 make app      # abre a interface em http://localhost:8501
 make test     # roda os testes
 ```
@@ -54,12 +54,53 @@ Teste "known item" (300 receitas sorteadas, semente 42): a despensa recebe 70% d
 
 Leitura: embeddings sozinhos não bastam para "lista de ingredientes → receita". O ranking do app perde para a busca por ingredientes nesse teste porque ele favorece receitas que a pessoa consegue fazer **agora** (maior cobertura, uso do que vence) e não a receita "certa" do sorteio. Precisamos de uma métrica alinhada ao objetivo (cobertura e itens urgentes aproveitados, avaliados com usuários) — ponto a discutir com o professor.
 
+## MLOps (registro, portão e volta atrás)
+
+Decisão em [ADR 0007](docs/adr/0007-mlops-registro-portao-e-retorno.md); desenho em `docs/superpowers/specs/2026-11-19-mlops-design.md`. O MLflow guarda cada versão candidata (parâmetros, métricas, configuração, commit e conjunto de avaliação). Uma versão só vira a **produção** (marca `producao`) se passar pelo portão: atingir os mínimos e não piorar além da tolerância contra a produção atual, no mesmo conjunto de avaliação. Os limites ficam em `mlops/gates.yaml` (mudar exige ADR).
+
+| Modelo registrado | O que é | Métricas do portão | Estado |
+|---|---|---|---|
+| `zd-rag-receitas` | configuração da recuperação (pesos do ranking, modelo de embeddings) | `hybrid_recall_at_10` ≥ 0,80 e `hybrid_mrr` ≥ 0,45; tolerância 0,02 | ligado: `make eval` registra, o app lê |
+| `zd-frescor` | classificador de frescor (Vitor) | `f1_macro` ≥ 0,85 e `recall_estragado` ≥ 0,85; tolerância 0,01 | só os limites existem |
+| `zd-explicacao` | prompt e explicação com LLM | `citacoes_validas` ≥ 0,95 e `afirmacoes_seguro` = 0; tolerância 0,02 | só os limites existem |
+
+```bash
+make eval                                              # mede e registra uma candidata (vN)
+make status                                            # mostra a versão em produção de cada modelo
+make promote  MODEL=zd-rag-receitas VERSION=2 MOTIVO="pesos novos"   # passa pelo portão
+make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="v2 piorou"     # volta atrás; o motivo é obrigatório
+make mlflow-ui                                         # interface do MLflow em http://localhost:5000
+```
+
+O CLI sai com código 1 quando o portão recusa (e mostra as razões); o make mostra o erro e sai com status diferente de zero. `make rollback` não passa pelo portão. Promover a versão que já está em produção, ou voltar para ela, não faz nada e não gera evento no log. Se `promote` ou `rollback` falharem por versão ou modelo inexistente, a marca não muda.
+
+**Exemplo de fluxo.** Para testar pesos novos sem editar código, grave um JSON com a configuração (`RagConfig`) e avalie com `--config`. O `embedding_model` do JSON precisa ser o mesmo do índice; se for diferente, a avaliação aborta. O `make eval` não repassa argumentos, então use o comando direto:
+
+```bash
+.venv/bin/python -m zerodesperdicio.evaluation retrieval --config arq.json --registrar
+make status
+make promote MODEL=zd-rag-receitas VERSION=2 MOTIVO="pesos novos"   # APROVADO ou RECUSADO, com as razões
+make rollback MODEL=zd-rag-receitas VERSION=1 MOTIVO="queda de qualidade"
+```
+
+**Atenção ao `$` no MOTIVO.** O make expande `$` nos valores da linha de comando: escreva `$$` para um `$` literal (ex.: `MOTIVO="custo de $$5"`). Aspas e crases não são interpretadas pelo shell.
+
+**Onde ficam as coisas**
+- `mlruns/` (banco SQLite `mlflow.db` e artefatos): local e ignorado no git, sempre na raiz do projeto, de qualquer pasta que o comando rode.
+- `reports/promocoes.jsonl`: uma linha por promoção, recusa ou volta atrás (quando, modelo, ação, de/para, quem, motivo, razões, métricas). Não vai para o git (está no `.gitignore`): o log é local por máquina enquanto o armazenamento compartilhado estiver em aberto.
+- `MLFLOW_TRACKING_URI`: aponta para outro servidor do MLflow em vez do SQLite local (`make mlflow-ui` abre só o banco local).
+
+**No app.** O app carrega a configuração do `zd-rag-receitas` marcada como `producao` e mostra a versão na aba "Dados e métricas". Se o registro estiver vazio, sem a marca, fora do ar ou incompatível, o app **não para**: usa a configuração padrão do código e mostra um aviso. Promoções e voltas atrás só valem depois de reiniciar o app.
+
 ## Estrutura
 
 ```
 src/zerodesperdicio/   pipeline.py · wikibooks.py · ingredients.py · ingredient_rules.py · pantry.py
                        ranking.py · index.py · llm.py · explain.py · agents.py · evaluation.py
+                       rag_config.py · app_support.py
+                       mlops/ (gates.py · registry.py · rag.py · __main__.py)
 app/streamlit_app.py   interface
+mlops/gates.yaml       limites do portão de promoção
 tests/                 testes (pytest), sem rede
 docs/adr/              decisões de arquitetura
 docs/superpowers/plans plano de implementação deste MVP
@@ -68,5 +109,5 @@ docs/superpowers/plans plano de implementação deste MVP
 ## Próximos passos
 
 - Semana 4: agente de Visão (foto → alimentos com classificador leve; foto → data de validade por OCR, lida em voz alta).
-- Semana 5: MLflow (experimentos de RAG e do classificador), DVC nos dados, CI no GitHub Actions com portão de métricas, Docker, monitoramento e retreino com as correções dos usuários.
+- Semana 5: ligar `zd-frescor` e `zd-explicacao` ao registro (hoje só o RAG está ligado), DVC nos dados e no pipeline, CI no GitHub Actions com portão de métricas, Docker, monitoramento e retreino com as correções dos usuários.
 - Métrica de utilidade com usuários reais e meta numérica para cada métrica.
